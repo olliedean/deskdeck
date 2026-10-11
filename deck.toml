@@ -1,0 +1,30 @@
+[deck]
+name = "Main"
+grid = { cols = 5, rows = 3 }
+
+[[page]]
+name = "Home"
+
+[[page.button]]
+id = "home"
+label = "Desktop"
+icon = null
+on_press = [
+    { action = "hotkey", keys = ["win", "d"] }
+]
+
+[[page.button]]
+id = "mute"
+label = "Mute mic"
+icon = null
+on_press = [
+    { action = "hotkey", keys = ["ctrl", "shift", "m"] }
+]
+
+[[page.button]]
+id = "web"
+label = "Browser"
+icon = null
+on_press = [
+    { action = "url", url = "https://example.com" }
+]

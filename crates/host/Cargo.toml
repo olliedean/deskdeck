@@ -1,0 +1,13 @@
+[package]
+name = "deskdeck-host"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+deskdeck-server = { path = "../server" }
+deskdeck-core = { path = "../core" }
+deskdeck-protocol = { path = "../protocol" }
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = "0.3"
+axum = { version = "0.8", features = ["ws"] }
