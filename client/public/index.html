@@ -22,11 +22,11 @@
             <div class="editor-toolbar" id="editor-toolbar" hidden>
                 <span class="editor-hint">Deck</span>
                 <div class="editor-actions">
-                    <button class="editor-button" id="grid-settings" type="button">Grid</button>
-                    <button class="editor-button" id="edit-mode" type="button">Edit deck</button>
-                    <button class="editor-button" id="add-button" type="button" hidden>Add button</button>
-                    <button class="editor-button quiet" id="discard-changes" type="button" hidden>Discard</button>
-                    <button class="editor-button primary" id="save-changes" type="button" hidden>Save changes</button>
+                    <button class="editor-button control" id="grid-settings" type="button">Grid</button>
+                    <button class="editor-button control" id="edit-mode" type="button">Edit deck</button>
+                    <button class="editor-button control" id="add-button" type="button" hidden>Add button</button>
+                    <button class="editor-button control quiet" id="discard-changes" type="button" hidden>Discard</button>
+                    <button class="editor-button control primary" id="save-changes" type="button" hidden>Save changes</button>
                 </div>
             </div>
             <div class="deck-frame">
@@ -38,7 +38,7 @@
             <form id="grid-form">
                 <div class="dialog-heading">
                     <div><h2>Grid layout</h2></div>
-                    <button class="close-button" type="button" id="close-grid-dialog" aria-label="Close">×</button>
+                    <button class="close-button control" type="button" id="close-grid-dialog" aria-label="Close">×</button>
                 </div>
                 <div class="grid-size-fields">
                     <label class="field">
@@ -50,8 +50,10 @@
                         <input name="rows" type="number" min="1" max="80" required>
                     </label>
                 </div>
-                    <button class="editor-button quiet" type="button" id="cancel-grid-dialog">Cancel</button>
-                    <button class="editor-button primary" type="submit">Apply</button>
+                <p class="grid-hint">Buttons stay square and shrink to fit the available screen space. The grid can contain up to 80 buttons; click Save changes to write this layout to deck.toml.</p>
+                <div class="dialog-actions">
+                    <button class="editor-button control quiet" type="button" id="cancel-grid-dialog">Cancel</button>
+                    <button class="editor-button control primary" type="submit">Apply</button>
                 </div>
             </form>
         </dialog>
@@ -61,7 +63,7 @@
                     <div>
                         <h2 id="dialog-title">Add button</h2>
                     </div>
-                    <button class="close-button" type="button" id="close-dialog" aria-label="Close">×</button>
+                    <button class="close-button control" type="button" id="close-dialog" aria-label="Close">×</button>
                 </div>
                 <label class="field">
                     <span>Button ID</span>
@@ -102,8 +104,8 @@
                 </div>
                 <div class="action-list" id="action-list"></div>
                 <div class="dialog-actions">
-                    <button class="editor-button quiet" type="button" id="cancel-dialog">Cancel</button>
-                    <button class="editor-button primary" type="submit">Done</button>
+                    <button class="editor-button control quiet" type="button" id="cancel-dialog">Cancel</button>
+                    <button class="editor-button control primary" type="submit">Done</button>
                 </div>
             </form>
         </dialog>

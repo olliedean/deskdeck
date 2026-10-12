@@ -215,12 +215,12 @@
                 tools.className = "button-tools";
                 const edit = document.createElement("button");
                 edit.type = "button";
-                edit.className = "button-tool";
+                edit.className = "button-tool control";
                 edit.textContent = "Edit";
                 edit.setAttribute("aria-label", `Edit ${button.label}`);
                 const remove = document.createElement("button");
                 remove.type = "button";
-                remove.className = "button-tool delete";
+                remove.className = "button-tool control delete";
                 remove.textContent = "×";
                 remove.setAttribute("aria-label", `Delete ${button.label}`);
                 edit.addEventListener("click", event => {
