@@ -223,9 +223,15 @@ mod tests {
         let deck = deck_from_file_or_create(&path).expect("missing deck should be generated");
         assert_eq!(deck.name, "Main");
         assert_eq!(deck.pages[0].buttons.len(), 3);
-        assert_eq!(deck.pages[0].buttons[0].icon.as_deref(), Some("fa-solid fa-desktop"));
+        assert_eq!(
+            deck.pages[0].buttons[0].icon.as_deref(),
+            Some("fa-solid fa-desktop")
+        );
         let default_deck = deck_default_home();
-        assert_eq!(deck.pages[0].buttons[1].id, default_deck.pages[0].buttons[1].id);
+        assert_eq!(
+            deck.pages[0].buttons[1].id,
+            default_deck.pages[0].buttons[1].id
+        );
 
         fs::remove_file(path).expect("generated test deck should be removed");
     }
