@@ -24,6 +24,12 @@ pub struct Button {
     pub id: String,
     pub label: String,
     pub icon: Option<String>,
+    #[serde(default)]
+    pub background_image: Option<String>,
+    #[serde(default)]
+    pub custom_css: Option<String>,
+    #[serde(default)]
+    pub custom_html: Option<String>,
     pub on_press: Vec<Action>,
 }
 

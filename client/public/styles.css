@@ -85,6 +85,10 @@ button { font: inherit; }
 .button-icon { display: grid; width: clamp(34px, 4.4vw, 46px); aspect-ratio: 1; place-items: center; border: 1px solid #515354; border-radius: 5px; background: #252627; color: #d5d6d4; font-size: clamp(19px, 2.4vw, 25px); line-height: 1; }
 .deck-button.is-active .button-icon { border-color: #608e84; color: #a7ddd0; }
 .button-label { display: block; max-width: 100%; overflow: hidden; color: #e0e1df; font-size: clamp(10px, 1.05vw, 12px); font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+.button-custom-content { position: relative; display: flex; width: 100%; height: 100%; min-height: 0; flex-direction: column; align-items: center; justify-content: center; gap: 5px; overflow: hidden; }
+.button-custom-content img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.button-custom-content p { margin: 0; }
+.button-custom-content br { display: block; }
 .empty-slot { aspect-ratio: 1 / .88; border: 1px solid #303133; border-radius: 7px; background: #212224; }
 .add-slot { display: grid; place-items: center; color: #9b9e9d; font-size: 27px; cursor: pointer; }
 .add-slot:hover { border-color: #668f85; color: #c1e3d9; }
@@ -109,6 +113,11 @@ button { font: inherit; }
 .field textarea { resize: vertical; }
 .field small { color: #929695; font-size: 11px; font-weight: 400; }
 .field code { color: #c4d9d2; }
+.appearance-options { margin: 5px 0 20px; border: 1px solid #414345; border-radius: 6px; background: #202123; }
+.appearance-options summary { padding: 12px; color: #d0d2d0; font-size: 13px; font-weight: 650; cursor: pointer; }
+.appearance-fields { padding: 4px 12px 2px; border-top: 1px solid #414345; }
+.appearance-fields .field { margin-top: 12px; }
+.appearance-fields textarea { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; font-size: 12px; line-height: 1.5; }
 .action-heading { display: flex; align-items: center; justify-content: space-between; margin: 20px 0 9px; color: #d0d2d0; font-size: 13px; font-weight: 650; }
 .text-button { border: 0; background: none; color: #a4d1c4; font-size: 12px; font-weight: 600; cursor: pointer; }
 .text-button:hover { color: #d2eee5; }

@@ -54,6 +54,26 @@
                     <input name="icon" autocomplete="off" placeholder="fa-solid fa-globe">
                     <small>Example: <code>fa-solid fa-desktop</code></small>
                 </label>
+                <details class="appearance-options">
+                    <summary>Button appearance</summary>
+                    <div class="appearance-fields">
+                        <label class="field">
+                            <span>Full-button image URL</span>
+                            <input name="background_image" type="url" autocomplete="url" placeholder="https://example.com/button.jpg">
+                            <small>Use a direct image URL. It will be cropped to fill the button.</small>
+                        </label>
+                        <label class="field">
+                            <span>Custom CSS</span>
+                            <textarea name="custom_css" rows="5" spellcheck="false" placeholder="background-color: #243447;&#10;border-radius: 18px;&#10;color: white;"></textarea>
+                            <small>CSS declarations applied to the whole button. Do not include a selector or braces.</small>
+                        </label>
+                        <label class="field">
+                            <span>Custom HTML</span>
+                            <textarea name="custom_html" rows="6" spellcheck="false" placeholder="<strong>LIVE</strong>&#10;<span>Scene 1</span>"></textarea>
+                            <small>Basic text and image markup is supported. Scripts, embeds and event handlers are removed.</small>
+                        </label>
+                    </div>
+                </details>
                 <div class="action-heading">
                     <span>Actions</span>
                     <button class="text-button" type="button" id="add-action">Add action</button>

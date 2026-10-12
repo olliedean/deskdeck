@@ -30,6 +30,12 @@ struct ButtonFileOutput<'a> {
     label: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     icon: &'a Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    background_image: &'a Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    custom_css: &'a Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    custom_html: &'a Option<String>,
     on_press: Vec<ActionFileOutput<'a>>,
 }
 
@@ -112,6 +118,9 @@ fn deck_file_output(deck: &Deck) -> DeckFileOutput<'_> {
                         id: &button.id,
                         label: &button.label,
                         icon: &button.icon,
+                        background_image: &button.background_image,
+                        custom_css: &button.custom_css,
+                        custom_html: &button.custom_html,
                         on_press: button
                             .on_press
                             .iter()
@@ -168,6 +177,9 @@ pub fn deck_default_home() -> Deck {
                     id: "home".to_string(),
                     label: "Desktop".to_string(),
                     icon: Some("fa-solid fa-desktop".to_string()),
+                    background_image: None,
+                    custom_css: None,
+                    custom_html: None,
                     on_press: vec![ProtocolAction {
                         kind: "hotkey".to_string(),
                         keys: vec!["win".to_string(), "d".to_string()],
@@ -181,6 +193,9 @@ pub fn deck_default_home() -> Deck {
                     id: "mute".to_string(),
                     label: "Mute mic".to_string(),
                     icon: Some("fa-solid fa-microphone-slash".to_string()),
+                    background_image: None,
+                    custom_css: None,
+                    custom_html: None,
                     on_press: vec![ProtocolAction {
                         kind: "hotkey".to_string(),
                         keys: vec!["ctrl".to_string(), "shift".to_string(), "m".to_string()],
@@ -194,6 +209,9 @@ pub fn deck_default_home() -> Deck {
                     id: "web".to_string(),
                     label: "Browser".to_string(),
                     icon: Some("fa-solid fa-globe".to_string()),
+                    background_image: None,
+                    custom_css: None,
+                    custom_html: None,
                     on_press: vec![ProtocolAction {
                         kind: "url".to_string(),
                         keys: vec![],
@@ -262,13 +280,31 @@ mod tests {
     #[test]
     fn saves_deck_and_can_load_it_again() {
         let path = test_path("saved");
-        let deck = deck_default_home();
+        let mut deck = deck_default_home();
+        deck.pages[0].buttons[0].background_image =
+            Some("https://example.com/button.jpg".to_string());
+        deck.pages[0].buttons[0].custom_css =
+            Some("background-color: #243447; color: white;".to_string());
+        deck.pages[0].buttons[0].custom_html =
+            Some("<strong>LIVE</strong><span>Scene 1</span>".to_string());
 
         deck_to_file(&path, &deck).expect("deck should save");
         let loaded = deck_from_file(&path).expect("saved deck should load");
 
         assert_eq!(loaded.name, deck.name);
         assert_eq!(loaded.pages[0].buttons.len(), deck.pages[0].buttons.len());
+        assert_eq!(
+            loaded.pages[0].buttons[0].background_image,
+            deck.pages[0].buttons[0].background_image
+        );
+        assert_eq!(
+            loaded.pages[0].buttons[0].custom_css,
+            deck.pages[0].buttons[0].custom_css
+        );
+        assert_eq!(
+            loaded.pages[0].buttons[0].custom_html,
+            deck.pages[0].buttons[0].custom_html
+        );
         assert_eq!(
             loaded.pages[0].buttons[1].on_press[0].keys,
             deck.pages[0].buttons[1].on_press[0].keys

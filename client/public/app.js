@@ -51,6 +51,78 @@
         element.classList.add(...classes);
     }
 
+    function safeHttpUrl(value) {
+        if (!value?.trim()) return null;
+        try {
+            const url = new URL(value.trim(), location.href);
+            return ["http:", "https:"].includes(url.protocol) ? url.href : null;
+        } catch {
+            return null;
+        }
+    }
+
+    function appendSafeHtml(parent, source) {
+        const template = document.createElement("template");
+        template.innerHTML = source;
+        const allowedTags = new Set(["DIV", "SPAN", "P", "STRONG", "B", "EM", "I", "SMALL", "BR", "IMG"]);
+        const blockedTags = new Set(["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "SVG", "MATH", "FORM", "INPUT", "BUTTON"]);
+
+        const copyNode = node => {
+            if (node.nodeType === Node.TEXT_NODE) return document.createTextNode(node.textContent ?? "");
+            if (node.nodeType !== Node.ELEMENT_NODE) return null;
+            if (blockedTags.has(node.tagName)) return null;
+            if (!allowedTags.has(node.tagName)) {
+                const fragment = document.createDocumentFragment();
+                for (const child of node.childNodes) {
+                    const safeChild = copyNode(child);
+                    if (safeChild) fragment.append(safeChild);
+                }
+                return fragment;
+            }
+
+            const safeElement = document.createElement(node.tagName.toLowerCase());
+            for (const attribute of ["class", "title", "alt"]) {
+                const value = node.getAttribute(attribute);
+                if (value && (attribute !== "class" || /^[\w -]{1,120}$/.test(value))) {
+                    safeElement.setAttribute(attribute, value);
+                }
+            }
+            if (node.tagName === "IMG") {
+                const src = safeHttpUrl(node.getAttribute("src"));
+                if (!src) return null;
+                safeElement.src = src;
+                safeElement.loading = "lazy";
+                safeElement.referrerPolicy = "no-referrer";
+            } else {
+                for (const child of node.childNodes) {
+                    const safeChild = copyNode(child);
+                    if (safeChild) safeElement.append(safeChild);
+                }
+            }
+            return safeElement;
+        };
+
+        const fragment = document.createDocumentFragment();
+        for (const child of template.content.childNodes) {
+            const safeChild = copyNode(child);
+            if (safeChild) fragment.append(safeChild);
+        }
+        parent.append(fragment);
+    }
+
+    function setButtonAppearance(element, button) {
+        const image = safeHttpUrl(button.background_image);
+        if (image) {
+            element.style.backgroundImage = `linear-gradient(rgba(0, 0, 0, .18), rgba(0, 0, 0, .35)), url("${image.replace(/"/g, "%22")}")`;
+            element.style.backgroundPosition = "center";
+            element.style.backgroundSize = "cover";
+        }
+        const css = button.custom_css?.trim();
+        if (css && !/(?:url\s*\(|@import|expression\s*\(|javascript\s*:)/i.test(css)) {
+            element.style.cssText += `;${css}`;
+        }
+    }
+
     function send(message) {
         if (!socket || socket.readyState !== WebSocket.OPEN) {
             showError("The deck is offline. Reconnecting…");
@@ -114,15 +186,23 @@
             element.className = "deck-button";
             element.dataset.buttonId = button.id;
             element.setAttribute("aria-label", button.label);
+            setButtonAppearance(element, button);
             if (draftDeck) element.setAttribute("role", "group");
-            const icon = document.createElement("span");
-            icon.className = "button-icon";
-            icon.setAttribute("aria-hidden", "true");
-            setIcon(icon, button.icon);
-            const label = document.createElement("span");
-            label.className = "button-label";
-            label.textContent = button.label;
-            element.append(icon, label);
+            if (button.custom_html?.trim()) {
+                const content = document.createElement("span");
+                content.className = "button-custom-content";
+                appendSafeHtml(content, button.custom_html);
+                element.append(content);
+            } else {
+                const icon = document.createElement("span");
+                icon.className = "button-icon";
+                icon.setAttribute("aria-hidden", "true");
+                setIcon(icon, button.icon);
+                const label = document.createElement("span");
+                label.className = "button-label";
+                label.textContent = button.label;
+                element.append(icon, label);
+            }
             if (draftDeck) {
                 const tools = document.createElement("span");
                 tools.className = "button-tools";
@@ -334,6 +414,9 @@
             buttonForm.elements.namedItem("id").value = button.id;
             buttonForm.elements.namedItem("label").value = button.label;
             buttonForm.elements.namedItem("icon").value = button.icon ?? "";
+            buttonForm.elements.namedItem("background_image").value = button.background_image ?? "";
+            buttonForm.elements.namedItem("custom_css").value = button.custom_css ?? "";
+            buttonForm.elements.namedItem("custom_html").value = button.custom_html ?? "";
             document.querySelector("#dialog-title").textContent = index === null ? "Add button" : "Edit button";
             actionList.replaceChildren(...button.on_press.map(makeActionEditor));
             dialog.showModal();
@@ -420,6 +503,9 @@
             id,
             label: buttonForm.elements.namedItem("label").value.trim(),
             icon: buttonForm.elements.namedItem("icon").value.trim() || null,
+            background_image: buttonForm.elements.namedItem("background_image").value.trim() || null,
+            custom_css: buttonForm.elements.namedItem("custom_css").value.trim() || null,
+            custom_html: buttonForm.elements.namedItem("custom_html").value || null,
             on_press: onPress,
         };
         if (editingButtonIndex === null) page.buttons.push(button);

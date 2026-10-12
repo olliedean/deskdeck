@@ -242,6 +242,32 @@ fn validate_deck(deck: &ProtocolDeck) -> Result<(), String> {
             if button.id.trim().is_empty() || button.label.trim().is_empty() {
                 return Err("button IDs and labels cannot be empty".to_string());
             }
+            if button.background_image.as_ref().is_some_and(|url| {
+                url.len() > 2048
+                    || (!url.is_empty()
+                        && !["http://", "https://", "/", "./", "../"]
+                            .iter()
+                            .any(|prefix| url.starts_with(prefix)))
+            }) {
+                return Err(format!(
+                    "background image URL is invalid or too long for button {:?}",
+                    button.id
+                ));
+            }
+            if button.custom_css.as_ref().is_some_and(|css| {
+                css.len() > 8192
+                    || ["url(", "@import", "expression(", "javascript:"]
+                        .iter()
+                        .any(|token| css.to_ascii_lowercase().contains(token))
+            }) {
+                return Err(format!(
+                    "custom CSS is too long or contains disallowed constructs for button {:?}",
+                    button.id
+                ));
+            }
+            if button.custom_html.as_ref().is_some_and(|html| html.len() > 32768) {
+                return Err(format!("custom HTML is too long for button {:?}", button.id));
+            }
             if !ids.insert(button.id.as_str()) {
                 return Err(format!("duplicate button ID: {}", button.id));
             }
@@ -286,5 +312,13 @@ mod tests {
         deck.pages[0].buttons[1].id = deck.pages[0].buttons[0].id.clone();
 
         assert!(validate_deck(&deck).unwrap_err().contains("duplicate button ID"));
+    }
+
+    #[test]
+    fn rejects_active_css_content_in_custom_styles() {
+        let mut deck = deck_default_home();
+        deck.pages[0].buttons[0].custom_css = Some("background-image: url(https://attacker.invalid)".into());
+
+        assert!(validate_deck(&deck).unwrap_err().contains("disallowed constructs"));
     }
 }
