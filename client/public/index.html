@@ -19,11 +19,52 @@
     <main class="app-shell">
         <section class="workspace" aria-label="Deck controls">
             <nav id="page-tabs" class="page-tabs" aria-label="Deck pages" hidden></nav>
+            <div class="editor-toolbar" id="editor-toolbar" hidden>
+                <span class="editor-hint">Deck</span>
+                <div class="editor-actions">
+                    <button class="editor-button" id="edit-mode" type="button">Edit deck</button>
+                    <button class="editor-button" id="add-button" type="button" hidden>Add button</button>
+                    <button class="editor-button quiet" id="discard-changes" type="button" hidden>Discard</button>
+                    <button class="editor-button primary" id="save-changes" type="button" hidden>Save changes</button>
+                </div>
+            </div>
             <div class="deck-frame">
                 <div class="deck-grid" id="buttons" aria-label="Buttons" aria-live="polite"></div>
             </div>
         </section>
         <div class="toast" id="toast" role="alert" hidden></div>
+        <dialog class="edit-dialog" id="edit-dialog">
+            <form id="button-form">
+                <div class="dialog-heading">
+                    <div>
+                        <h2 id="dialog-title">Add button</h2>
+                    </div>
+                    <button class="close-button" type="button" id="close-dialog" aria-label="Close">×</button>
+                </div>
+                <label class="field">
+                    <span>Button ID</span>
+                    <input name="id" required maxlength="48" autocomplete="off" pattern="[A-Za-z0-9_-]+" placeholder="open-browser">
+                </label>
+                <label class="field">
+                    <span>Label</span>
+                    <input name="label" required maxlength="40" autocomplete="off" placeholder="Browser">
+                </label>
+                <label class="field">
+                    <span>Font Awesome classes</span>
+                    <input name="icon" autocomplete="off" placeholder="fa-solid fa-globe">
+                    <small>Example: <code>fa-solid fa-desktop</code></small>
+                </label>
+                <div class="action-heading">
+                    <span>Actions</span>
+                    <button class="text-button" type="button" id="add-action">Add action</button>
+                </div>
+                <div class="action-list" id="action-list"></div>
+                <div class="dialog-actions">
+                    <button class="editor-button quiet" type="button" id="cancel-dialog">Cancel</button>
+                    <button class="editor-button primary" type="submit">Done</button>
+                </div>
+            </form>
+        </dialog>
     </main>
 </body>
 </html>

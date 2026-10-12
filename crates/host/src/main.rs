@@ -2,6 +2,7 @@ use deskdeck_core::config::deck_from_file_or_create;
 use deskdeck_core::input::enigo::EnigoInput;
 use deskdeck_server::{create_app_state, router};
 use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tracing_subscriber;
@@ -12,7 +13,7 @@ async fn main() {
 
     let deck = deck_from_file_or_create("deck.toml").expect("Failed to load deck.toml");
     let input = Arc::new(EnigoInput::new().expect("Failed to initialize desktop input"));
-    let state = create_app_state(deck, input);
+    let state = create_app_state(deck, input, PathBuf::from("deck.toml"));
 
     let bind_addr = SocketAddr::from(([0, 0, 0, 0], 8080));
     let listener = TcpListener::bind(bind_addr).await.expect("Failed to bind");
@@ -30,7 +31,10 @@ async fn main() {
     println!("LAN access is unauthenticated; only run DeskDeck on a trusted network.");
     println!("Press any button on the tablet!");
 
-    axum::serve(listener, router(Arc::clone(&state)))
+    axum::serve(
+        listener,
+        router(Arc::clone(&state)).into_make_service_with_connect_info::<SocketAddr>(),
+    )
         .await
         .expect("Failed to serve");
 }

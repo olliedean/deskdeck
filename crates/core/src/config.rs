@@ -148,6 +148,15 @@ pub fn deck_from_file(path: &str) -> Result<Deck, ConfigError> {
     })
 }
 
+pub fn deck_to_file(path: &str, deck: &Deck) -> Result<(), ConfigError> {
+    let contents = toml::to_string_pretty(&deck_file_output(deck))?;
+    let path = std::path::Path::new(path);
+    let temp_path = path.with_extension("toml.tmp");
+    std::fs::write(&temp_path, contents)?;
+    std::fs::rename(temp_path, path)?;
+    Ok(())
+}
+
 pub fn deck_default_home() -> Deck {
     Deck {
         name: "Main".to_string(),
@@ -205,7 +214,7 @@ pub fn find_button<'a>(deck: &'a Deck, id: &'a str) -> Option<&'a Button> {
 
 #[cfg(test)]
 mod tests {
-    use super::{deck_default_home, deck_from_file_or_create};
+    use super::{deck_default_home, deck_from_file, deck_from_file_or_create, deck_to_file};
     use std::fs;
 
     fn test_path(name: &str) -> String {
@@ -248,5 +257,23 @@ mod tests {
         assert_eq!(fs::read_to_string(&path).unwrap(), contents);
 
         fs::remove_file(path).expect("test deck should be removed");
+    }
+
+    #[test]
+    fn saves_deck_and_can_load_it_again() {
+        let path = test_path("saved");
+        let deck = deck_default_home();
+
+        deck_to_file(&path, &deck).expect("deck should save");
+        let loaded = deck_from_file(&path).expect("saved deck should load");
+
+        assert_eq!(loaded.name, deck.name);
+        assert_eq!(loaded.pages[0].buttons.len(), deck.pages[0].buttons.len());
+        assert_eq!(
+            loaded.pages[0].buttons[1].on_press[0].keys,
+            deck.pages[0].buttons[1].on_press[0].keys
+        );
+
+        fs::remove_file(path).expect("saved test deck should be removed");
     }
 }

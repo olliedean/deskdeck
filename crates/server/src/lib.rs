@@ -1,14 +1,18 @@
 use axum::{
-    extract::{Path, State, WebSocketUpgrade},
+    extract::{ConnectInfo, Path, State, WebSocketUpgrade},
+    http::StatusCode,
     response::{IntoResponse, Response},
     Json, Router, routing::get,
 };
 use futures_util::{SinkExt, StreamExt};
 use std::sync::Arc;
+use std::path::PathBuf;
+use std::net::SocketAddr;
 use tokio::sync::RwLock;
 use tower_http::services::ServeDir;
 
 use deskdeck_core::engine::Engine;
+use deskdeck_core::config::deck_to_file;
 use deskdeck_core::input::InputBackend;
 use deskdeck_protocol::deck::Deck as ProtocolDeck;
 use deskdeck_protocol::deck::Page;
@@ -20,9 +24,14 @@ pub struct AppState {
     pub engine: Arc<Engine>,
     pub tokens: Arc<RwLock<std::collections::HashMap<String, String>>>,
     pub welcome_tx: tokio::sync::broadcast::Sender<ProtocolDeck>,
+    pub deck_path: PathBuf,
 }
 
-pub fn create_app_state(deck: ProtocolDeck, input: Arc<dyn InputBackend>) -> Arc<AppState> {
+pub fn create_app_state(
+    deck: ProtocolDeck,
+    input: Arc<dyn InputBackend>,
+    deck_path: PathBuf,
+) -> Arc<AppState> {
     let engine = Arc::new(Engine::new(deck.clone(), input));
     let (tx, _rx) = tokio::sync::broadcast::channel(10);
     let _ = tx.send(deck);
@@ -31,6 +40,7 @@ pub fn create_app_state(deck: ProtocolDeck, input: Arc<dyn InputBackend>) -> Arc
         engine,
         tokens: Arc::new(RwLock::new(std::collections::HashMap::new())),
         welcome_tx: tx,
+        deck_path,
     })
 }
 
@@ -39,7 +49,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/ws", get(ws_handler))
         .route("/pair", get(pairing))
         .route("/pair/{token}", get(pairing_token))
-        .route("/deck", get(get_deck))
+        .route("/deck", get(get_deck).put(put_deck))
         .route("/deck/{page}", get(get_page))
         .fallback_service(ServeDir::new("client/public"))
         .with_state(state)
@@ -172,6 +182,74 @@ async fn get_deck(State(state): State<Arc<AppState>>) -> Json<ProtocolDeck> {
     Json(state.engine.deck().await)
 }
 
+async fn put_deck(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    Json(deck): Json<ProtocolDeck>,
+) -> Response {
+    if !peer.ip().is_loopback() {
+        return (
+            StatusCode::FORBIDDEN,
+            "deck editing is only allowed from this host; open DeskDeck at http://127.0.0.1:8080",
+        )
+            .into_response();
+    }
+
+    if let Err(error) = validate_deck(&deck) {
+        return (StatusCode::BAD_REQUEST, error).into_response();
+    }
+
+    if let Err(error) = deck_to_file(
+        state.deck_path.to_string_lossy().as_ref(),
+        &deck,
+    ) {
+        tracing::error!("failed to save deck configuration: {error}");
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("failed to save deck: {error}"),
+        )
+            .into_response();
+    }
+
+    state.engine.set_deck(deck.clone()).await;
+    if let Err(error) = state.welcome_tx.send(deck.clone()) {
+        tracing::warn!("deck saved, but no clients received the deck update: {error}");
+    }
+    Json(deck).into_response()
+}
+
+fn validate_deck(deck: &ProtocolDeck) -> Result<(), String> {
+    if deck.name.trim().is_empty() {
+        return Err("deck name cannot be empty".to_string());
+    }
+    if deck.grid.cols == 0 || deck.grid.rows == 0 {
+        return Err("deck grid must have at least one column and row".to_string());
+    }
+    if deck.pages.is_empty() {
+        return Err("deck must contain at least one page".to_string());
+    }
+
+    let capacity = (usize::from(deck.grid.cols) * usize::from(deck.grid.rows)).min(80);
+    let mut ids = std::collections::HashSet::new();
+    for page in &deck.pages {
+        if page.buttons.len() > capacity {
+            return Err(format!(
+                "page {:?} has more buttons than the grid can display",
+                page.name
+            ));
+        }
+        for button in &page.buttons {
+            if button.id.trim().is_empty() || button.label.trim().is_empty() {
+                return Err("button IDs and labels cannot be empty".to_string());
+            }
+            if !ids.insert(button.id.as_str()) {
+                return Err(format!("duplicate button ID: {}", button.id));
+            }
+        }
+    }
+    Ok(())
+}
+
 async fn get_page(Path(page): Path<String>, State(state): State<Arc<AppState>>) -> Json<Page> {
     let deck = state.engine.deck().await;
     let page = deck
@@ -184,4 +262,29 @@ async fn get_page(Path(page): Path<String>, State(state): State<Arc<AppState>>) 
             buttons: vec![],
         });
     Json(page)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{create_app_state, router, validate_deck};
+    use deskdeck_core::{config::deck_default_home, input::FakeInput};
+    use std::{path::PathBuf, sync::Arc};
+
+    #[test]
+    fn deck_route_supports_read_and_update_methods() {
+        let state = create_app_state(
+            deck_default_home(),
+            Arc::new(FakeInput::new()),
+            PathBuf::from("deck.toml"),
+        );
+        let _router = router(state);
+    }
+
+    #[test]
+    fn rejects_duplicate_button_ids_before_saving() {
+        let mut deck = deck_default_home();
+        deck.pages[0].buttons[1].id = deck.pages[0].buttons[0].id.clone();
+
+        assert!(validate_deck(&deck).unwrap_err().contains("duplicate button ID"));
+    }
 }
