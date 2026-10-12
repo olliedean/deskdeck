@@ -38,9 +38,9 @@ pub fn router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/ws", get(ws_handler))
         .route("/pair", get(pairing))
-        .route("/pair/:token", get(pairing_token))
+        .route("/pair/{token}", get(pairing_token))
         .route("/deck", get(get_deck))
-        .route("/deck/:page", get(get_page))
+        .route("/deck/{page}", get(get_page))
         .fallback_service(ServeDir::new("client/public"))
         .with_state(state)
 }
@@ -73,26 +73,9 @@ async fn ws_handler(
 ) -> Response {
     ws.on_upgrade(|socket| async move {
         let (mut tx, mut rx) = socket.split();
-        let mut welcome1 = state.welcome_tx.subscribe();
-        let mut welcome2 = state.welcome_tx.subscribe();
+        let mut deck_updates = state.welcome_tx.subscribe();
 
-        // Get initial deck
-        let deck = match welcome1.recv().await {
-            Ok(deck) => deck,
-            Err(_) => ProtocolDeck {
-                name: "Default".to_string(),
-                grid: deskdeck_protocol::deck::Grid { cols: 5, rows: 3 },
-                pages: vec![deskdeck_protocol::deck::Page {
-                    name: "Home".to_string(),
-                    buttons: vec![deskdeck_protocol::deck::Button {
-                        id: "test".to_string(),
-                        label: "Test".to_string(),
-                        icon: None,
-                        on_press: vec![],
-                    }],
-                }],
-            },
-        };
+        let deck = state.engine.deck().await;
 
         // Send initial welcome
         let welcome_json = serde_json::to_string(&HostMessage::Welcome(make_welcome(&deck))).unwrap();
@@ -152,7 +135,7 @@ async fn ws_handler(
                     }
                 }
                 // Check for broadcast updates
-                msg = welcome2.recv() => {
+                msg = deck_updates.recv() => {
                     match msg {
                         Ok(deck) => {
                             let msg = serde_json::to_string(&HostMessage::DeckUpdated(deck)).unwrap();

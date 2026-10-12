@@ -5,10 +5,11 @@ grid = { cols = 5, rows = 3 }
 [[page]]
 name = "Home"
 
+# Icons use Font Awesome Free classes.
 [[page.button]]
 id = "home"
 label = "Desktop"
-icon = null
+icon = "fa-solid fa-desktop"
 on_press = [
     { action = "hotkey", keys = ["win", "d"] }
 ]
@@ -16,7 +17,7 @@ on_press = [
 [[page.button]]
 id = "mute"
 label = "Mute mic"
-icon = null
+icon = "fa-solid fa-microphone-slash"
 on_press = [
     { action = "hotkey", keys = ["ctrl", "shift", "m"] }
 ]
@@ -24,7 +25,7 @@ on_press = [
 [[page.button]]
 id = "web"
 label = "Browser"
-icon = null
+icon = "fa-solid fa-globe"
 on_press = [
     { action = "url", url = "https://example.com" }
 ]

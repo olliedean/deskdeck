@@ -31,6 +31,7 @@ pub struct Button {
 pub struct Action {
     #[serde(rename = "action")]
     pub kind: String,
+    #[serde(default)]
     pub keys: Vec<String>,
     pub text: Option<String>,
     pub url: Option<String>,

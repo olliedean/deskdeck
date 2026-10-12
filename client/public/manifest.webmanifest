@@ -1,0 +1,19 @@
+{
+  "name": "DeskDeck",
+  "short_name": "DeskDeck",
+  "description": "A customizable shortcut deck for your desktop.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#18191b",
+  "theme_color": "#18191b",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
