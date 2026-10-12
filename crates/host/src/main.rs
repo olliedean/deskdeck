@@ -1,11 +1,17 @@
+mod tray;
+
 use deskdeck_core::config::deck_from_file_or_create;
 use deskdeck_core::input::enigo::EnigoInput;
 use deskdeck_server::{create_app_state, router};
+use ksni::TrayMethods;
 use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
 use std::path::PathBuf;
+use std::process::Command;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio::sync::mpsc;
 use tracing_subscriber;
+use tray::{DeskDeckTray, TrayAction};
 
 #[tokio::main]
 async fn main() {
@@ -31,12 +37,57 @@ async fn main() {
     println!("LAN access is unauthenticated; only run DeskDeck on a trusted network.");
     println!("Press any button on the tablet!");
 
-    axum::serve(
-        listener,
-        router(Arc::clone(&state)).into_make_service_with_connect_info::<SocketAddr>(),
-    )
-        .await
-        .expect("Failed to serve");
+    let (tray_tx, mut tray_rx) = mpsc::unbounded_channel();
+    let _tray_sender = tray_tx.clone();
+    let _tray = match (DeskDeckTray { actions: tray_tx }).spawn().await {
+        Ok(handle) => {
+            println!("DeskDeck system tray is ready");
+            Some(handle)
+        }
+        Err(error) => {
+            tracing::warn!("system tray unavailable: {error}");
+            None
+        }
+    };
+
+    let service = router(Arc::clone(&state)).into_make_service_with_connect_info::<SocketAddr>();
+    let server = async move { axum::serve(listener, service).await };
+    tokio::pin!(server);
+    loop {
+        tokio::select! {
+            result = &mut server => {
+                result.expect("Failed to serve");
+                break;
+            }
+            action = tray_rx.recv() => {
+                match action {
+                    Some(TrayAction::OpenDeck) => open_url("http://127.0.0.1:8080/"),
+                    Some(TrayAction::OpenPairing) => open_url("http://127.0.0.1:8080/pair"),
+                    Some(TrayAction::OpenConfig) => open_path(&PathBuf::from("deck.toml")),
+                    Some(TrayAction::Quit) => break,
+                    None => tracing::warn!("system tray action channel closed"),
+                }
+            }
+        }
+    }
+}
+
+fn open_url(url: &str) {
+    if let Err(error) = Command::new("xdg-open").arg(url).spawn() {
+        tracing::error!("failed to open {url} from the system tray: {error}");
+    }
+}
+
+fn open_path(path: &std::path::Path) {
+    match std::env::current_dir() {
+        Ok(directory) => {
+            let path = directory.join(path);
+            if let Err(error) = Command::new("xdg-open").arg(&path).spawn() {
+                tracing::error!("failed to open deck config {}: {error}", path.display());
+            }
+        }
+        Err(error) => tracing::error!("failed to locate deck config directory: {error}"),
+    }
 }
 
 fn network_ipv4_addr() -> std::io::Result<Ipv4Addr> {
