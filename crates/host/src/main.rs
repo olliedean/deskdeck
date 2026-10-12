@@ -1,4 +1,4 @@
-use deskdeck_core::config::deck_from_file;
+use deskdeck_core::config::deck_from_file_or_create;
 use deskdeck_server::{create_app_state, router};
 use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::Arc;
@@ -9,7 +9,7 @@ use tracing_subscriber;
 async fn main() {
     tracing_subscriber::fmt::init();
 
-    let deck = deck_from_file("deck.toml").expect("Failed to load deck.toml");
+    let deck = deck_from_file_or_create("deck.toml").expect("Failed to load deck.toml");
     let state = Arc::new(create_app_state(deck));
 
     let bind_addr = SocketAddr::from(([0, 0, 0, 0], 8080));
