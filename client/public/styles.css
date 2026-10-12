@@ -25,14 +25,16 @@ button { font: inherit; }
 
 .app-shell {
     width: min(100%, 1280px);
+    height: 100dvh;
     min-height: 100dvh;
+    overflow: hidden;
     margin: 0 auto;
     padding: max(18px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
     display: flex;
     flex-direction: column;
 }
 
-.workspace { width: min(100%, 980px); margin: auto; padding: 26px 0; }
+.workspace { display: flex; width: min(100%, 980px); min-height: 0; flex: 1; flex-direction: column; justify-content: center; margin: auto; padding: 26px 0; }
 .page-tabs { display: flex; gap: 4px; margin: 0 0 12px; }
 .page-tabs[hidden] { display: none; }
 .page-tab { min-width: 76px; border: 0; border-bottom: 2px solid transparent; padding: 10px 14px; background: none; color: #a8a9a9; font-size: 12px; font-weight: 600; cursor: pointer; }
@@ -48,26 +50,31 @@ button { font: inherit; }
 .editor-button:disabled { cursor: wait; opacity: .6; }
 
 .deck-frame {
+    width: max-content;
+    max-width: 100%;
+    flex: 0 0 auto;
+    margin-inline: auto;
     padding: clamp(18px, 3.5vw, 34px);
     border: 1px solid #424345;
     border-radius: 10px;
     background: #242527;
     box-shadow: 0 10px 26px rgba(0, 0, 0, .2), inset 0 1px 0 rgba(255, 255, 255, .035);
 }
-.deck-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: clamp(9px, 1.5vw, 15px); }
+.deck-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: clamp(6px, 1.5vw, 15px); }
+.deck-grid > * { width: 100% !important; height: 100% !important; min-width: 0 !important; min-height: 0 !important; }
 
 .deck-button {
     position: relative;
     display: flex;
     min-width: 0;
-    min-height: 96px;
-    aspect-ratio: 1 / .88;
+    min-height: 0;
+    aspect-ratio: 1;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: clamp(2px, calc(var(--button-size) * .09), 10px);
     overflow: hidden;
-    padding: 12px 8px;
+    padding: clamp(3px, calc(var(--button-size) * .1), 12px) clamp(2px, calc(var(--button-size) * .07), 8px);
     border: 1px solid #4a4b4d;
     border-radius: 7px;
     background: #303133;
@@ -82,14 +89,14 @@ button { font: inherit; }
 .deck-button[role="group"] { cursor: default; }
 .deck-button[role="group"]:hover { border-color: #4a4b4d; background: #303133; }
 .deck-button:focus-visible, .page-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.button-icon { display: grid; width: clamp(34px, 4.4vw, 46px); aspect-ratio: 1; place-items: center; border: 1px solid #515354; border-radius: 5px; background: #252627; color: #d5d6d4; font-size: clamp(19px, 2.4vw, 25px); line-height: 1; }
+.button-icon { display: grid; width: clamp(14px, calc(var(--button-size) * .4), 46px); height: clamp(14px, calc(var(--button-size) * .4), 46px); place-items: center; border: 1px solid #515354; border-radius: 5px; background: #252627; color: #d5d6d4; font-size: clamp(10px, calc(var(--button-size) * .22), 25px); line-height: 1; }
 .deck-button.is-active .button-icon { border-color: #608e84; color: #a7ddd0; }
-.button-label { display: block; max-width: 100%; overflow: hidden; color: #e0e1df; font-size: clamp(10px, 1.05vw, 12px); font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+.button-label { display: block; max-width: 100%; overflow: hidden; color: #e0e1df; font-size: clamp(7px, calc(var(--button-size) * .1), 12px); font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
 .button-custom-content { position: relative; display: flex; width: 100%; height: 100%; min-height: 0; flex-direction: column; align-items: center; justify-content: center; gap: 5px; overflow: hidden; }
 .button-custom-content img { max-width: 100%; max-height: 100%; object-fit: contain; }
 .button-custom-content p { margin: 0; }
 .button-custom-content br { display: block; }
-.empty-slot { aspect-ratio: 1 / .88; border: 1px solid #303133; border-radius: 7px; background: #212224; }
+.empty-slot { min-width: 0; min-height: 0; aspect-ratio: 1; border: 1px solid #303133; border-radius: 7px; background: #212224; }
 .add-slot { display: grid; place-items: center; color: #9b9e9d; font-size: 27px; cursor: pointer; }
 .add-slot:hover { border-color: #668f85; color: #c1e3d9; }
 .button-tools { position: absolute; inset: 0; display: flex; align-items: flex-end; justify-content: center; gap: 6px; padding: 0 6px 7px; background: linear-gradient(transparent 42%, rgba(20, 21, 22, .94)); }
@@ -101,6 +108,7 @@ button { font: inherit; }
 .toast[data-kind="success"] { border-color: #52796e; background: #22302c; color: #c2e4d9; }
 
 .edit-dialog { width: min(560px, calc(100vw - 28px)); max-height: min(88dvh, 820px); padding: 0; overflow: auto; border: 1px solid #4b4d4d; border-radius: 9px; background: #242527; color: #ededec; box-shadow: 0 24px 70px rgba(0, 0, 0, .5); }
+.settings-dialog { width: min(400px, calc(100vw - 28px)); }
 .edit-dialog::backdrop { background: rgba(0, 0, 0, .62); }
 .edit-dialog form { padding: 22px; }
 .dialog-heading, .action-row-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -113,6 +121,7 @@ button { font: inherit; }
 .field textarea { resize: vertical; }
 .field small { color: #929695; font-size: 11px; font-weight: 400; }
 .field code { color: #c4d9d2; }
+.grid-size-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .appearance-options { margin: 5px 0 20px; border: 1px solid #414345; border-radius: 6px; background: #202123; }
 .appearance-options summary { padding: 12px; color: #d0d2d0; font-size: 13px; font-weight: 650; cursor: pointer; }
 .appearance-fields { padding: 4px 12px 2px; border-top: 1px solid #414345; }
@@ -138,19 +147,16 @@ button { font: inherit; }
     .app-shell { padding-right: max(14px, env(safe-area-inset-right)); padding-left: max(14px, env(safe-area-inset-left)); }
     .workspace { padding-top: 18px; }
     .deck-frame { padding: 12px; border-radius: 8px; }
-    .deck-grid { gap: 8px; }
-    .deck-button { min-height: 76px; aspect-ratio: 1 / 1; gap: 7px; padding: 8px 4px; border-radius: 6px; }
-    .empty-slot { min-height: 76px; aspect-ratio: 1 / 1; border-radius: 6px; }
+    .deck-grid { gap: 6px; }
+    .deck-button { border-radius: 6px; }
+    .empty-slot { border-radius: 6px; }
 }
 
 @media (orientation: portrait) and (max-width: 680px) {
     .workspace { width: 100%; }
     .deck-frame { padding: 9px; }
-    .deck-grid { gap: 6px; }
-    .deck-button { min-height: 64px; gap: 5px; }
-    .empty-slot { min-height: 64px; }
-    .button-icon { width: clamp(27px, 8vw, 38px); border-radius: 4px; font-size: clamp(16px, 4.5vw, 21px); }
-    .button-label { font-size: clamp(8px, 2.45vw, 10px); }
+    .deck-grid { gap: 5px; }
+    .button-icon { border-radius: 4px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

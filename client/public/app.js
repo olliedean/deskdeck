@@ -5,12 +5,17 @@
     const pageTabs = document.querySelector("#page-tabs");
     const toast = document.querySelector("#toast");
     const toolbar = document.querySelector("#editor-toolbar");
+    const workspace = document.querySelector(".workspace");
+    const deckFrame = document.querySelector(".deck-frame");
     const editorHint = document.querySelector(".editor-hint");
+    const gridSettingsButton = document.querySelector("#grid-settings");
     const editModeButton = document.querySelector("#edit-mode");
     const addButton = document.querySelector("#add-button");
     const saveButton = document.querySelector("#save-changes");
     const discardButton = document.querySelector("#discard-changes");
     const dialog = document.querySelector("#edit-dialog");
+    const gridDialog = document.querySelector("#grid-dialog");
+    const gridForm = document.querySelector("#grid-form");
     const buttonForm = document.querySelector("#button-form");
     const actionList = document.querySelector("#action-list");
     let deck = null;
@@ -163,6 +168,7 @@
         const cols = Math.max(1, Number(shownDeck.grid?.cols) || 5);
         const rows = Math.max(1, Number(shownDeck.grid?.rows) || 3);
         toolbar.hidden = !isDesktop.matches;
+        gridSettingsButton.hidden = !isDesktop.matches || !isLocalHost;
         editorHint.textContent = isLocalHost ? "Deck setup" : "Open http://127.0.0.1:8080 on the host to edit";
         editModeButton.hidden = Boolean(draftDeck) || !isLocalHost;
         addButton.hidden = !draftDeck;
@@ -178,6 +184,7 @@
         renderPages();
         const capacity = Math.min(cols * rows, 80);
         grid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
+        grid.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
         grid.replaceChildren();
 
         page.buttons.slice(0, capacity).forEach((button, index) => {
@@ -271,6 +278,33 @@
             slot.setAttribute("aria-hidden", "true");
             grid.append(slot);
         }
+        fitGrid(cols, rows);
+    }
+
+    function fitGrid(cols, rows) {
+        const frameStyle = getComputedStyle(deckFrame);
+        const workspaceStyle = getComputedStyle(workspace);
+        const frameHorizontalInsets = ["paddingLeft", "paddingRight", "borderLeftWidth", "borderRightWidth"]
+            .reduce((total, key) => total + Number.parseFloat(frameStyle[key] || "0"), 0);
+        const frameVerticalInsets = ["paddingTop", "paddingBottom", "borderTopWidth", "borderBottomWidth"]
+            .reduce((total, key) => total + Number.parseFloat(frameStyle[key] || "0"), 0);
+        const workspacePadding = ["paddingTop", "paddingBottom"]
+            .reduce((total, key) => total + Number.parseFloat(workspaceStyle[key] || "0"), 0);
+        const toolbarHeight = toolbar.hidden ? 0 : toolbar.getBoundingClientRect().height
+            + Number.parseFloat(getComputedStyle(toolbar).marginBottom || "0");
+        const tabsHeight = pageTabs.hidden ? 0 : pageTabs.getBoundingClientRect().height
+            + Number.parseFloat(getComputedStyle(pageTabs).marginBottom || "0");
+        const gridStyle = getComputedStyle(grid);
+        const gapX = Number.parseFloat(gridStyle.columnGap) || 0;
+        const gapY = Number.parseFloat(gridStyle.rowGap) || 0;
+        const availableWidth = workspace.clientWidth - frameHorizontalInsets;
+        const availableHeight = workspace.clientHeight - workspacePadding - toolbarHeight - tabsHeight - frameVerticalInsets;
+        const widthPerCell = (availableWidth - gapX * (cols - 1)) / cols;
+        const heightPerCell = (availableHeight - gapY * (rows - 1)) / rows;
+        const size = Math.max(1, Math.floor(Math.min(widthPerCell, heightPerCell)));
+        grid.style.setProperty("--button-size", `${size}px`);
+        grid.style.gridTemplateColumns = `repeat(${cols}, ${size}px)`;
+        grid.style.gridTemplateRows = `repeat(${rows}, ${size}px)`;
     }
 
     function handleHostMessage(message) {
@@ -469,6 +503,34 @@
         draftDeck = structuredClone(deck);
         renderDeck();
     });
+    gridSettingsButton.addEventListener("click", () => {
+        if (!deck) return;
+        if (!draftDeck) draftDeck = structuredClone(deck);
+        gridForm.elements.namedItem("cols").value = draftDeck.grid.cols;
+        gridForm.elements.namedItem("rows").value = draftDeck.grid.rows;
+        renderDeck();
+        gridDialog.showModal();
+    });
+    document.querySelector("#close-grid-dialog").addEventListener("click", () => gridDialog.close());
+    document.querySelector("#cancel-grid-dialog").addEventListener("click", () => gridDialog.close());
+    gridForm.addEventListener("submit", event => {
+        event.preventDefault();
+        if (!gridForm.reportValidity()) return;
+        const cols = Number(gridForm.elements.namedItem("cols").value);
+        const rows = Number(gridForm.elements.namedItem("rows").value);
+        if (cols * rows > 80) {
+            showError("The grid can contain no more than 80 buttons.");
+            return;
+        }
+        const fullestPage = Math.max(...draftDeck.pages.map(page => page.buttons.length));
+        if (cols * rows < fullestPage) {
+            showError(`The grid must fit the ${fullestPage} buttons on the fullest page.`);
+            return;
+        }
+        draftDeck.grid = { cols, rows };
+        gridDialog.close();
+        renderDeck();
+    });
     addButton.addEventListener("click", addDraftButton);
     discardButton.addEventListener("click", () => {
         draftDeck = null;
@@ -518,6 +580,10 @@
         buttonForm.reset();
     });
     isDesktop.addEventListener("change", renderDeck);
+    window.addEventListener("resize", () => {
+        const active = activeDeck();
+        if (active) fitGrid(active.grid.cols, active.grid.rows);
+    });
 
     function connect() {
         clearTimeout(reconnectTimer);

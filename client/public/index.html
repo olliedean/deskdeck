@@ -22,6 +22,7 @@
             <div class="editor-toolbar" id="editor-toolbar" hidden>
                 <span class="editor-hint">Deck</span>
                 <div class="editor-actions">
+                    <button class="editor-button" id="grid-settings" type="button">Grid</button>
                     <button class="editor-button" id="edit-mode" type="button">Edit deck</button>
                     <button class="editor-button" id="add-button" type="button" hidden>Add button</button>
                     <button class="editor-button quiet" id="discard-changes" type="button" hidden>Discard</button>
@@ -33,6 +34,27 @@
             </div>
         </section>
         <div class="toast" id="toast" role="alert" hidden></div>
+        <dialog class="edit-dialog settings-dialog" id="grid-dialog">
+            <form id="grid-form">
+                <div class="dialog-heading">
+                    <div><h2>Grid layout</h2></div>
+                    <button class="close-button" type="button" id="close-grid-dialog" aria-label="Close">×</button>
+                </div>
+                <div class="grid-size-fields">
+                    <label class="field">
+                        <span>Columns</span>
+                        <input name="cols" type="number" min="1" max="80" required>
+                    </label>
+                    <label class="field">
+                        <span>Rows</span>
+                        <input name="rows" type="number" min="1" max="80" required>
+                    </label>
+                </div>
+                    <button class="editor-button quiet" type="button" id="cancel-grid-dialog">Cancel</button>
+                    <button class="editor-button primary" type="submit">Apply</button>
+                </div>
+            </form>
+        </dialog>
         <dialog class="edit-dialog" id="edit-dialog">
             <form id="button-form">
                 <div class="dialog-heading">
