@@ -1,4 +1,5 @@
 use deskdeck_core::config::deck_from_file_or_create;
+use deskdeck_core::input::enigo::EnigoInput;
 use deskdeck_server::{create_app_state, router};
 use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
 use std::sync::Arc;
@@ -10,7 +11,8 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     let deck = deck_from_file_or_create("deck.toml").expect("Failed to load deck.toml");
-    let state = Arc::new(create_app_state(deck));
+    let input = Arc::new(EnigoInput::new().expect("Failed to initialize desktop input"));
+    let state = create_app_state(deck, input);
 
     let bind_addr = SocketAddr::from(([0, 0, 0, 0], 8080));
     let listener = TcpListener::bind(bind_addr).await.expect("Failed to bind");

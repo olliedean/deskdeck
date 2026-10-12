@@ -9,7 +9,7 @@ use tokio::sync::RwLock;
 use tower_http::services::ServeDir;
 
 use deskdeck_core::engine::Engine;
-use deskdeck_core::input::FakeInput;
+use deskdeck_core::input::InputBackend;
 use deskdeck_protocol::deck::Deck as ProtocolDeck;
 use deskdeck_protocol::deck::Page;
 use deskdeck_protocol::client::{
@@ -22,8 +22,8 @@ pub struct AppState {
     pub welcome_tx: tokio::sync::broadcast::Sender<ProtocolDeck>,
 }
 
-pub fn create_app_state(deck: ProtocolDeck) -> Arc<AppState> {
-    let engine = Arc::new(Engine::new(deck.clone(), Arc::new(FakeInput::new())));
+pub fn create_app_state(deck: ProtocolDeck, input: Arc<dyn InputBackend>) -> Arc<AppState> {
+    let engine = Arc::new(Engine::new(deck.clone(), input));
     let (tx, _rx) = tokio::sync::broadcast::channel(10);
     let _ = tx.send(deck);
 

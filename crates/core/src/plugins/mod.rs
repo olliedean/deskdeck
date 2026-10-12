@@ -126,7 +126,9 @@ mod tests {
 
         let events = input.events();
         assert!(matches!(events[0].kind, FakeEventKind::KeyDown));
-        assert!(matches!(events[2].kind, FakeEventKind::KeyDown));
+        assert!(matches!(events[1].kind, FakeEventKind::KeyDown));
+        assert!(matches!(events[2].kind, FakeEventKind::KeyUp));
+        assert!(matches!(events[3].kind, FakeEventKind::KeyUp));
         assert!(matches!(events[4].kind, FakeEventKind::Type));
         assert_eq!(events[4].key, "hello");
     }

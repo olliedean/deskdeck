@@ -7,7 +7,7 @@ edition = "2021"
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
 thiserror = "2"
-enigo = "0.6"
+enigo = { version = "0.6", default-features = false, features = ["wayland", "x11rb"] }
 async-trait = "0.1"
 deskdeck-protocol = { path = "../protocol" }
 open = "3"
