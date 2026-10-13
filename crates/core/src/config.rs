@@ -38,22 +38,7 @@ struct ButtonFileOutput<'a> {
     custom_css: &'a Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     custom_html: &'a Option<String>,
-    on_press: Vec<ActionFileOutput<'a>>,
-}
-
-#[derive(Serialize)]
-struct ActionFileOutput<'a> {
-    #[serde(rename = "action")]
-    kind: &'a str,
-    keys: &'a [String],
-    #[serde(skip_serializing_if = "Option::is_none")]
-    text: &'a Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    url: &'a Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    command: &'a Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    delay: &'a Option<f64>,
+    on_press: &'a [ProtocolAction],
 }
 
 #[derive(Deserialize)]
@@ -124,18 +109,7 @@ fn deck_file_output(deck: &Deck) -> DeckFileOutput<'_> {
                         background_image: &button.background_image,
                         custom_css: &button.custom_css,
                         custom_html: &button.custom_html,
-                        on_press: button
-                            .on_press
-                            .iter()
-                            .map(|action| ActionFileOutput {
-                                kind: &action.kind,
-                                keys: &action.keys,
-                                text: &action.text,
-                                url: &action.url,
-                                command: &action.command,
-                                delay: &action.delay,
-                            })
-                            .collect(),
+                        on_press: &button.on_press,
                     })
                     .collect(),
             })
@@ -186,11 +160,10 @@ pub fn deck_default_home() -> Deck {
                     custom_html: None,
                     on_press: vec![ProtocolAction {
                         kind: "hotkey".to_string(),
-                        keys: vec!["win".to_string(), "d".to_string()],
-                        text: None,
-                        url: None,
-                        command: None,
-                        delay: None,
+                        config: serde_json::from_value(serde_json::json!({
+                            "keys": "win, d"
+                        }))
+                        .expect("default action config should be valid"),
                     }],
                 },
                 Button {
@@ -203,11 +176,10 @@ pub fn deck_default_home() -> Deck {
                     custom_html: None,
                     on_press: vec![ProtocolAction {
                         kind: "hotkey".to_string(),
-                        keys: vec!["ctrl".to_string(), "shift".to_string(), "m".to_string()],
-                        text: None,
-                        url: None,
-                        command: None,
-                        delay: None,
+                        config: serde_json::from_value(serde_json::json!({
+                            "keys": "ctrl, shift, m"
+                        }))
+                        .expect("default action config should be valid"),
                     }],
                 },
                 Button {
@@ -220,11 +192,10 @@ pub fn deck_default_home() -> Deck {
                     custom_html: None,
                     on_press: vec![ProtocolAction {
                         kind: "url".to_string(),
-                        keys: vec![],
-                        text: None,
-                        url: Some("https://example.com".to_string()),
-                        command: None,
-                        delay: None,
+                        config: serde_json::from_value(serde_json::json!({
+                            "url": "https://example.com"
+                        }))
+                        .expect("default action config should be valid"),
                     }],
                 },
             ],
@@ -284,6 +255,33 @@ mod tests {
     }
 
     #[test]
+    fn loads_legacy_flat_action_settings() {
+        let path = test_path("legacy-action");
+        let contents = r#"
+[deck]
+name = "Legacy"
+grid = { cols = 1, rows = 1 }
+
+[[page]]
+name = "Home"
+
+[[page.button]]
+id = "shortcut"
+label = "Shortcut"
+on_press = [{ action = "hotkey", keys = ["ctrl", "d"] }]
+"#;
+        fs::write(&path, contents).expect("legacy test deck should be written");
+
+        let deck = deck_from_file(&path).expect("legacy action should load");
+
+        assert_eq!(
+            deck.pages[0].buttons[0].on_press[0].config["keys"],
+            serde_json::Value::String("ctrl, d".to_string())
+        );
+        fs::remove_file(path).expect("legacy test deck should be removed");
+    }
+
+    #[test]
     fn saves_deck_and_can_load_it_again() {
         let path = test_path("saved");
         let mut deck = deck_default_home();
@@ -317,8 +315,8 @@ mod tests {
             deck.pages[0].buttons[0].position
         );
         assert_eq!(
-            loaded.pages[0].buttons[1].on_press[0].keys,
-            deck.pages[0].buttons[1].on_press[0].keys
+            loaded.pages[0].buttons[1].on_press[0].config,
+            deck.pages[0].buttons[1].on_press[0].config
         );
 
         fs::remove_file(path).expect("saved test deck should be removed");

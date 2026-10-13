@@ -1,4 +1,4 @@
-const CACHE_NAME = "1";
+const CACHE_NAME = "2";
 const SHELL = ["/", "/index.html", "/styles.css", "/app.js", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", event => {
@@ -18,7 +18,10 @@ self.addEventListener("activate", event => {
 self.addEventListener("fetch", event => {
     const requestUrl = new URL(event.request.url);
     if (event.request.method !== "GET" || requestUrl.origin !== self.location.origin) return;
-    if (requestUrl.pathname === "/deck" || requestUrl.pathname.startsWith("/deck/") || requestUrl.pathname === "/ws") return;
+    if (
+        ["/deck", "/actions", "/ws"].includes(requestUrl.pathname)
+        || requestUrl.pathname.startsWith("/deck/")
+    ) return;
 
     if (event.request.mode === "navigate") {
         event.respondWith(fetch(event.request).catch(() => caches.match("/index.html")));

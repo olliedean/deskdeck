@@ -14,6 +14,7 @@ use tower_http::services::ServeDir;
 use deskdeck_core::engine::Engine;
 use deskdeck_core::config::deck_to_file;
 use deskdeck_core::input::InputBackend;
+use deskdeck_core::plugins::PluginRegistry;
 use deskdeck_protocol::deck::Deck as ProtocolDeck;
 use deskdeck_protocol::deck::Page;
 use deskdeck_protocol::client::{
@@ -51,6 +52,7 @@ pub fn router(state: Arc<AppState>) -> Router {
         .route("/pair/{token}", get(pairing_token))
         .route("/deck", get(get_deck).put(put_deck))
         .route("/deck/{page}", get(get_page))
+        .route("/actions", get(get_actions))
         .fallback_service(ServeDir::new("client/public"))
         .with_state(state)
 }
@@ -182,6 +184,12 @@ async fn get_deck(State(state): State<Arc<AppState>>) -> Json<ProtocolDeck> {
     Json(state.engine.deck().await)
 }
 
+async fn get_actions(
+    State(state): State<Arc<AppState>>,
+) -> Json<Vec<deskdeck_core::plugins::ActionDefinition>> {
+    Json(state.engine.plugins().definitions())
+}
+
 async fn put_deck(
     State(state): State<Arc<AppState>>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
@@ -195,7 +203,7 @@ async fn put_deck(
             .into_response();
     }
 
-    if let Err(error) = validate_deck(&deck) {
+    if let Err(error) = validate_deck(&deck, state.engine.plugins()) {
         return (StatusCode::BAD_REQUEST, error).into_response();
     }
 
@@ -218,7 +226,7 @@ async fn put_deck(
     Json(deck).into_response()
 }
 
-fn validate_deck(deck: &ProtocolDeck) -> Result<(), String> {
+fn validate_deck(deck: &ProtocolDeck, plugins: &PluginRegistry) -> Result<(), String> {
     if deck.name.trim().is_empty() {
         return Err("deck name cannot be empty".to_string());
     }
@@ -285,6 +293,11 @@ fn validate_deck(deck: &ProtocolDeck) -> Result<(), String> {
             if !ids.insert(button.id.as_str()) {
                 return Err(format!("duplicate button ID: {}", button.id));
             }
+            for action in &button.on_press {
+                plugins
+                    .validate(action)
+                    .map_err(|error| format!("button {:?}: {error}", button.id))?;
+            }
         }
     }
     Ok(())
@@ -306,9 +319,16 @@ async fn get_page(Path(page): Path<String>, State(state): State<Arc<AppState>>) 
 
 #[cfg(test)]
 mod tests {
-    use super::{create_app_state, router, validate_deck};
+    use super::{create_app_state, router};
+    use axum::Json;
     use deskdeck_core::{config::deck_default_home, input::FakeInput};
+    use deskdeck_core::plugins::PluginRegistry;
+    use deskdeck_protocol::deck::Deck;
     use std::{path::PathBuf, sync::Arc};
+
+    fn validate_deck(deck: &Deck) -> Result<(), String> {
+        super::validate_deck(deck, &PluginRegistry::with_defaults())
+    }
 
     #[test]
     fn deck_route_supports_read_and_update_methods() {
@@ -318,6 +338,23 @@ mod tests {
             PathBuf::from("deck.toml"),
         );
         let _router = router(state);
+    }
+
+    #[tokio::test]
+    async fn action_catalog_exposes_plugin_field_definitions() {
+        let state = create_app_state(
+            deck_default_home(),
+            Arc::new(FakeInput::new()),
+            PathBuf::from("deck.toml"),
+        );
+        let Json(definitions) = super::get_actions(axum::extract::State(state)).await;
+        let hotkey = definitions
+            .iter()
+            .find(|definition| definition.kind == "hotkey")
+            .unwrap();
+
+        assert_eq!(hotkey.fields[0].key, "keys");
+        assert_eq!(hotkey.fields[0].label, "Keys (comma-separated)");
     }
 
     #[test]
@@ -351,5 +388,18 @@ mod tests {
         deck.pages[0].buttons[0].position = Some(15);
 
         assert!(validate_deck(&deck).unwrap_err().contains("position outside the grid"));
+    }
+
+    #[test]
+    fn rejects_invalid_action_configurations() {
+        let mut deck = deck_default_home();
+        deck.pages[0].buttons[0].on_press[0].config.insert(
+            "keys".to_string(),
+            serde_json::Value::String("ctrl, ".to_string()),
+        );
+
+        assert!(validate_deck(&deck)
+            .unwrap_err()
+            .contains("hotkey keys must not contain empty entries"));
     }
 }

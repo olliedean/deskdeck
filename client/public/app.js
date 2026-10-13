@@ -18,8 +18,11 @@
     const gridForm = document.querySelector("#grid-form");
     const buttonForm = document.querySelector("#button-form");
     const actionList = document.querySelector("#action-list");
+    const addActionButton = document.querySelector("#add-action");
     let deck = null;
     let draftDeck = null;
+    let actionDefinitions = new Map();
+    let actionsReady = false;
     let currentPage = 0;
     let editingButtonIndex = null;
     let newButtonPosition = null;
@@ -172,8 +175,10 @@
         gridSettingsButton.hidden = !isDesktop.matches || !isLocalHost;
         editorHint.textContent = isLocalHost ? "Deck setup" : "Open http://127.0.0.1:8080 on the host to edit";
         editModeButton.hidden = Boolean(draftDeck) || !isLocalHost;
+        editModeButton.disabled = !actionsReady;
         addButton.hidden = !draftDeck;
-        addButton.disabled = Boolean(draftDeck && page && page.buttons.length >= Math.min(cols * rows, 80));
+        addButton.disabled = !actionsReady
+            || Boolean(draftDeck && page && page.buttons.length >= Math.min(cols * rows, 80));
         saveButton.hidden = !draftDeck;
         discardButton.hidden = !draftDeck;
         if (!page) {
@@ -348,101 +353,132 @@
         }
     }
 
-    function makeActionEditor(action = { action: "hotkey", keys: ["ctrl", "d"] }) {
-            const actionKind = action.action ?? action.kind ?? "hotkey";
-            const row = document.createElement("fieldset");
-            row.className = "action-row";
-            const heading = document.createElement("div");
-            heading.className = "action-row-heading";
-            const kindLabel = document.createElement("label");
-            kindLabel.className = "field compact";
-            const kindCaption = document.createElement("span");
-            kindCaption.textContent = "Action type";
-            const kind = document.createElement("select");
-            kind.className = "action-kind";
-            [
-                ["hotkey", "Hotkey"],
-                ["url", "Open URL"],
-                ["command", "Run command"],
-                ["type", "Type text"],
-                ["delay", "Delay"],
-            ].forEach(([value, label]) => {
-                const option = document.createElement("option");
-                option.value = value;
-                option.textContent = label;
-                kind.append(option);
-            });
-            if (![...kind.options].some(option => option.value === actionKind)) {
-                const option = document.createElement("option");
-                option.value = actionKind;
-                option.textContent = `Plugin: ${actionKind}`;
-                kind.append(option);
-            }
-            kind.value = actionKind;
-            kindLabel.append(kindCaption, kind);
-            const remove = document.createElement("button");
-            remove.type = "button";
-            remove.className = "text-button remove-action";
-            remove.textContent = "Remove";
-            remove.addEventListener("click", () => row.remove());
-            heading.append(kindLabel, remove);
-            const valueFields = document.createElement("div");
-            valueFields.className = "action-values";
-            row.append(heading, valueFields);
-
-            const updateFields = () => {
-                valueFields.replaceChildren();
-                const field = (name, label, value, placeholder = "") => {
-                    const wrapper = document.createElement("label");
-                    wrapper.className = "field compact";
-                    const caption = document.createElement("span");
-                    caption.textContent = label;
-                    const input = document.createElement(name === "delay" ? "input" : "textarea");
-                    input.dataset.value = name;
-                    input.value = value ?? "";
-                    input.placeholder = placeholder;
-                    input.required =
-                        (kind.value === "hotkey" && name === "keys")
-                        || (kind.value === name && ["url", "command", "delay"].includes(name));
-                    if (name === "delay") {
-                        input.type = "number";
-                        input.min = "0";
-                        input.step = "0.1";
-                    } else if (name === "keys") {
-                        input.rows = 1;
-                    } else {
-                        input.rows = 2;
-                    }
-                    wrapper.append(caption, input);
-                    valueFields.append(wrapper);
-                };
-                if (kind.value === "hotkey") {
-                    field("keys", "Keys (comma-separated)", (action.keys ?? []).join(", "), "ctrl, shift, m");
-                } else if (kind.value === "url") {
-                    field("url", "URL", action.url, "https://example.com");
-                } else if (kind.value === "command") {
-                    field("command", "Command", action.command, "your-command");
-                } else if (kind.value === "type") {
-                    field("text", "Text", action.text, "Text to type");
-                } else if (kind.value === "delay") {
-                    field("delay", "Seconds", action.delay ?? 1, "1");
-                } else {
-                    field("keys", "Keys", (action.keys ?? []).join(", "));
-                    field("text", "Text", action.text);
-                    field("url", "URL", action.url);
-                    field("command", "Command", action.command);
-                    field("delay", "Seconds", action.delay);
-                }
-            };
-            kind.addEventListener("change", () => {
-                action = { action: kind.value };
-                updateFields();
-            });
-            updateFields();
-            return row;
+    async function loadActionDefinitions() {
+        try {
+            const response = await fetch("/actions", { cache: "no-store" });
+            if (!response.ok) throw new Error(`Action catalog request failed (${response.status})`);
+            const definitions = await response.json();
+            if (!Array.isArray(definitions)) throw new Error("Action catalog response is invalid");
+            actionDefinitions = new Map(definitions.map(definition => [definition.kind, definition]));
+            actionsReady = true;
+            renderDeck();
+        } catch (error) {
+            showError(`Could not load action definitions: ${error.message}`);
         }
+    }
+
+    function makeActionEditor(action = { action: "hotkey", config: { keys: "ctrl, d" } }) {
+        const actionKind = action.action ?? action.kind ?? "hotkey";
+        let config = structuredClone(action.config ?? {});
+        const row = document.createElement("fieldset");
+        row.className = "action-row";
+        const heading = document.createElement("div");
+        heading.className = "action-row-heading";
+        const kindLabel = document.createElement("label");
+        kindLabel.className = "field compact";
+        const kindCaption = document.createElement("span");
+        kindCaption.textContent = "Action";
+        const kind = document.createElement("select");
+        kind.className = "action-kind";
+        for (const definition of actionDefinitions.values()) {
+            const option = document.createElement("option");
+            option.value = definition.kind;
+            option.textContent = definition.name;
+            kind.append(option);
+        }
+        if (!actionDefinitions.has(actionKind)) {
+            const option = document.createElement("option");
+            option.value = actionKind;
+            option.textContent = `Unavailable: ${actionKind}`;
+            kind.append(option);
+            row.dataset.originalConfig = JSON.stringify(config);
+        }
+        kind.value = actionKind;
+        kindLabel.append(kindCaption, kind);
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "text-button remove-action";
+        remove.textContent = "Remove";
+        remove.addEventListener("click", () => row.remove());
+        heading.append(kindLabel, remove);
+        const valueFields = document.createElement("div");
+        valueFields.className = "action-values";
+        row.append(heading, valueFields);
+
+        const renderFields = () => {
+            valueFields.replaceChildren();
+            const definition = actionDefinitions.get(kind.value);
+            if (!definition) {
+                const notice = document.createElement("small");
+                notice.className = "action-description";
+                notice.textContent = "This action plugin is not currently available.";
+                valueFields.append(notice);
+                return;
+            }
+            const description = document.createElement("p");
+            description.className = "action-description";
+            description.textContent = definition.description;
+            valueFields.append(description);
+            for (const field of definition.fields) {
+                const wrapper = document.createElement("label");
+                wrapper.className = "field compact";
+                const caption = document.createElement("span");
+                caption.textContent = field.label;
+                let input;
+                if (field.type === "multiline") {
+                    input = document.createElement("textarea");
+                    input.rows = 3;
+                } else if (field.type === "select") {
+                    input = document.createElement("select");
+                    for (const optionValue of field.options ?? []) {
+                        const option = document.createElement("option");
+                        option.value = optionValue;
+                        option.textContent = optionValue;
+                        input.append(option);
+                    }
+                } else {
+                    input = document.createElement("input");
+                    input.type = field.type === "number" ? "number" : "text";
+                }
+                input.dataset.configKey = field.key;
+                input.required = field.required;
+                input.placeholder = field.placeholder ?? "";
+                if (field.min !== undefined) input.min = field.min;
+                if (field.max !== undefined) input.max = field.max;
+                if (field.step !== undefined) input.step = field.step;
+                const value = config[field.key]
+                    ?? field.default
+                    ?? (field.type === "select" ? field.options?.[0] : "");
+                input.value = value;
+                wrapper.append(caption, input);
+                if (field.help) {
+                    const help = document.createElement("small");
+                    help.textContent = field.help;
+                    wrapper.append(help);
+                }
+                valueFields.append(wrapper);
+            }
+        };
+
+        kind.addEventListener("change", () => {
+            const definition = actionDefinitions.get(kind.value);
+            config = Object.fromEntries(
+                (definition?.fields ?? [])
+                    .filter(field => field.default !== undefined)
+                    .map(field => [field.key, field.default]),
+            );
+            delete row.dataset.originalConfig;
+            renderFields();
+        });
+        renderFields();
+        return row;
+    }
 
         function openButtonDialog(index = null) {
+            if (!actionsReady) {
+                showError("Action definitions are not available yet.");
+                return;
+            }
             const page = activeDeck().pages[currentPage];
             editingButtonIndex = index;
             const button = index === null
@@ -451,7 +487,7 @@
                     label: "New button",
                     icon: null,
                     position: newButtonPosition,
-                    on_press: [{ action: "hotkey", keys: ["ctrl", "d"] }],
+                    on_press: [{ action: "hotkey", config: { keys: "ctrl, d" } }],
                 }
                 : page.buttons[index];
             buttonForm.elements.namedItem("id").value = button.id;
@@ -466,6 +502,7 @@
         }
 
         function addDraftButton(position = null) {
+            if (!actionsReady) return;
             const page = activeDeck().pages[currentPage];
             const capacity = Math.min(activeDeck().grid.cols * activeDeck().grid.rows, 80);
             const occupied = new Set(page.buttons.map((button, index) =>
@@ -478,16 +515,19 @@
         }
 
     function readAction(row) {
-            const kind = row.querySelector(".action-kind").value;
-            const action = { action: kind, keys: [], text: null, url: null, command: null, delay: null };
-            const value = row.querySelector("[data-value]")?.value ?? "";
-            if (kind === "hotkey") action.keys = value.split(",").map(key => key.trim()).filter(Boolean);
-            if (kind === "url") action.url = value.trim() || null;
-            if (kind === "command") action.command = value.trim() || null;
-            if (kind === "type") action.text = value || null;
-            if (kind === "delay") action.delay = value.trim() ? Number(value) : null;
-            return action;
+        const kind = row.querySelector(".action-kind").value;
+        const definition = actionDefinitions.get(kind);
+        if (!definition) {
+            return { action: kind, config: JSON.parse(row.dataset.originalConfig ?? "{}") };
         }
+        const config = {};
+        for (const field of definition.fields) {
+            const input = row.querySelector(`[data-config-key="${CSS.escape(field.key)}"]`);
+            if (!input || (input.value === "" && !field.required)) continue;
+            config[field.key] = field.type === "number" ? Number(input.value) : input.value;
+        }
+        return { action: kind, config };
+    }
 
     async function saveDraft() {
             saveButton.disabled = true;
@@ -551,7 +591,8 @@
         renderDeck();
     });
     saveButton.addEventListener("click", saveDraft);
-    document.querySelector("#add-action").addEventListener("click", () => {
+    addActionButton.addEventListener("click", () => {
+        if (!actionsReady) return;
         actionList.append(makeActionEditor());
     });
     document.querySelector("#close-dialog").addEventListener("click", () => dialog.close());
@@ -571,10 +612,6 @@
             return;
         }
         const onPress = [...actionList.querySelectorAll(".action-row")].map(readAction);
-        if (onPress.some(action => action.action === "hotkey" && action.keys.length === 0)) {
-            showError("A hotkey action needs at least one key.");
-            return;
-        }
         const button = {
             id,
             label: buttonForm.elements.namedItem("label").value.trim(),
@@ -630,6 +667,7 @@
     }
 
     loadDeck();
+    loadActionDefinitions();
     connect();
     if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {

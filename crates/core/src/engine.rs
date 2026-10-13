@@ -56,6 +56,10 @@ impl Engine {
         *self.deck.write().await = deck;
     }
 
+    pub fn plugins(&self) -> &PluginRegistry {
+        &self.plugins
+    }
+
     pub async fn press(
         &self,
         button_id: &str,

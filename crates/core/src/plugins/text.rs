@@ -1,20 +1,37 @@
-use super::{ActionPlugin, PluginError};
+use super::{ActionDefinition, ActionField, ActionFieldType, ActionPlugin, PluginError};
 use crate::input::InputBackend;
 use async_trait::async_trait;
-use deskdeck_protocol::deck::Action;
+use serde_json::{Map, Value};
 
 pub struct TypeTextPlugin;
 
 #[async_trait]
 impl ActionPlugin for TypeTextPlugin {
-    fn kind(&self) -> &'static str {
-        "type"
+    fn definition(&self) -> ActionDefinition {
+        ActionDefinition {
+            kind: "type".to_string(),
+            name: "Type text".to_string(),
+            description: "Type text into the currently focused application.".to_string(),
+            fields: vec![ActionField::text(
+                "text",
+                "Text",
+                ActionFieldType::Multiline,
+                true,
+                "Text to type",
+                "Text is sent as keyboard input to the active application.",
+                None,
+            )],
+        }
     }
 
-    async fn execute(&self, action: &Action, input: &dyn InputBackend) -> Result<(), PluginError> {
-        let text = action.text.as_deref().ok_or_else(|| {
-            PluginError::InvalidConfiguration("type action requires text".to_string())
-        })?;
+    async fn execute(
+        &self,
+        config: &Map<String, Value>,
+        input: &dyn InputBackend,
+    ) -> Result<(), PluginError> {
+        let text = config["text"]
+            .as_str()
+            .expect("field validation checked text");
         input
             .type_text(text)
             .await

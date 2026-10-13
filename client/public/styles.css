@@ -146,6 +146,7 @@ button { font: inherit; }
 .field.compact { flex: 1; margin-bottom: 9px; }
 .field.compact select, .field.compact textarea, .field.compact input { padding: 8px; font-size: 12px; }
 .action-values { display: grid; }
+.action-description { margin: 0 0 10px; color: var(--text-muted); font-size: 12px; line-height: 1.4; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
 
 @media (min-width: 800px) and (pointer: fine) {

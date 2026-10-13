@@ -1,23 +1,53 @@
-use super::{ActionPlugin, PluginError};
+use super::{ActionDefinition, ActionField, ActionFieldType, ActionPlugin, PluginError};
 use crate::input::InputBackend;
 use async_trait::async_trait;
-use deskdeck_protocol::deck::Action;
+use serde_json::{Map, Value};
 
 pub struct HotkeyPlugin;
 
 #[async_trait]
 impl ActionPlugin for HotkeyPlugin {
-    fn kind(&self) -> &'static str {
-        "hotkey"
+    fn definition(&self) -> ActionDefinition {
+        ActionDefinition {
+            kind: "hotkey".to_string(),
+            name: "Hotkey".to_string(),
+            description: "Press a key or key combination.".to_string(),
+            fields: vec![ActionField::text(
+                "keys",
+                "Keys (comma-separated)",
+                ActionFieldType::Text,
+                true,
+                "ctrl, shift, m",
+                "Modifiers first, followed by the key to press.",
+                Some("ctrl, d"),
+            )],
+        }
     }
 
-    async fn execute(&self, action: &Action, input: &dyn InputBackend) -> Result<(), PluginError> {
-        if action.keys.is_empty() {
+    fn validate_config(&self, config: &Map<String, Value>) -> Result<(), PluginError> {
+        let keys = config["keys"]
+            .as_str()
+            .expect("field validation checked keys");
+        if keys.split(',').any(|key| key.trim().is_empty()) {
             return Err(PluginError::InvalidConfiguration(
-                "hotkey action requires at least one key".to_string(),
+                "hotkey keys must not contain empty entries".to_string(),
             ));
         }
-        let (key, modifiers) = action.keys.split_last().expect("keys were checked");
+        Ok(())
+    }
+
+    async fn execute(
+        &self,
+        config: &Map<String, Value>,
+        input: &dyn InputBackend,
+    ) -> Result<(), PluginError> {
+        let keys: Vec<String> = config["keys"]
+            .as_str()
+            .expect("field validation checked keys")
+            .split(',')
+            .map(|key| key.trim().to_string())
+            .collect();
+        let (key, modifiers) = keys.split_last().expect("field validation checked keys");
         let mut held: Vec<&String> = Vec::new();
         for modifier in modifiers {
             if let Err(error) = input.key_down(modifier).await {
@@ -53,6 +83,7 @@ mod tests {
     use super::{ActionPlugin, HotkeyPlugin};
     use crate::input::{FakeEventKind, FakeInput};
     use deskdeck_protocol::deck::Action;
+    use serde_json::json;
 
     #[tokio::test]
     async fn holds_modifiers_while_clicking_the_final_key() {
@@ -60,14 +91,10 @@ mod tests {
         let input = FakeInput::new();
         let action = Action {
             kind: "hotkey".to_string(),
-            keys: vec!["ctrl".to_string(), "shift".to_string(), "m".to_string()],
-            text: None,
-            url: None,
-            command: None,
-            delay: None,
+            config: serde_json::from_value(json!({"keys": "ctrl, shift, m"})).unwrap(),
         };
 
-        plugin.execute(&action, &input).await.unwrap();
+        plugin.execute(&action.config, &input).await.unwrap();
         let events = input.events();
         assert!(matches!(events[0].kind, FakeEventKind::KeyDown));
         assert_eq!(events[0].key, "ctrl");
