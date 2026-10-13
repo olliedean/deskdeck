@@ -22,6 +22,7 @@
     let draftDeck = null;
     let currentPage = 0;
     let editingButtonIndex = null;
+    let newButtonPosition = null;
     let socket = null;
     let reconnectTimer = null;
     let toastTimer = null;
@@ -183,11 +184,32 @@
         currentPage = shownDeck.pages.indexOf(page);
         renderPages();
         const capacity = Math.min(cols * rows, 80);
+        const positionedButtons = new Map();
+        page.buttons.forEach((button, index) => {
+            positionedButtons.set(Number.isInteger(button.position) ? button.position : index, { button, index });
+        });
         grid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
         grid.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
         grid.replaceChildren();
 
-        page.buttons.slice(0, capacity).forEach((button, index) => {
+        for (let position = 0; position < capacity; position += 1) {
+            const placed = positionedButtons.get(position);
+            if (!placed) {
+                const slot = draftDeck ? document.createElement("button") : document.createElement("div");
+                slot.className = draftDeck ? "empty-slot add-slot" : "empty-slot";
+                if (draftDeck) {
+                    slot.type = "button";
+                    slot.textContent = "+";
+                    slot.setAttribute("aria-label", `Add button at position ${position + 1}`);
+                    slot.addEventListener("click", () => addDraftButton(position));
+                } else {
+                    slot.setAttribute("aria-hidden", "true");
+                }
+                grid.append(slot);
+                continue;
+            }
+
+            const { button, index } = placed;
             const element = document.createElement(draftDeck ? "div" : "button");
             element.type = "button";
             element.className = "deck-button";
@@ -230,6 +252,9 @@
                 remove.addEventListener("click", event => {
                     event.stopPropagation();
                     if (window.confirm(`Delete "${button.label}"?`)) {
+                        page.buttons.forEach((candidate, candidateIndex) => {
+                            if (!Number.isInteger(candidate.position)) candidate.position = candidateIndex;
+                        });
                         page.buttons.splice(index, 1);
                         renderDeck();
                     }
@@ -260,23 +285,6 @@
                 if (!draftDeck && (event.key === " " || event.key === "Enter")) press(button, false);
             });
             grid.append(element);
-        });
-
-        for (let index = page.buttons.length; index < capacity; index += 1) {
-            if (draftDeck) {
-                const addSlot = document.createElement("button");
-                addSlot.type = "button";
-                addSlot.className = "empty-slot add-slot";
-                addSlot.textContent = "+";
-                addSlot.setAttribute("aria-label", "Add button");
-                addSlot.addEventListener("click", addDraftButton);
-                grid.append(addSlot);
-                continue;
-            }
-            const slot = document.createElement("div");
-            slot.className = "empty-slot";
-            slot.setAttribute("aria-hidden", "true");
-            grid.append(slot);
         }
         fitGrid(cols, rows);
     }
@@ -442,6 +450,7 @@
                     id: `button-${Date.now().toString(36)}`,
                     label: "New button",
                     icon: null,
+                    position: newButtonPosition,
                     on_press: [{ action: "hotkey", keys: ["ctrl", "d"] }],
                 }
                 : page.buttons[index];
@@ -456,11 +465,16 @@
             dialog.showModal();
         }
 
-        function addDraftButton() {
+        function addDraftButton(position = null) {
             const page = activeDeck().pages[currentPage];
-            if (page.buttons.length < Math.min(activeDeck().grid.cols * activeDeck().grid.rows, 80)) {
-                openButtonDialog();
-            }
+            const capacity = Math.min(activeDeck().grid.cols * activeDeck().grid.rows, 80);
+            const occupied = new Set(page.buttons.map((button, index) =>
+                Number.isInteger(button.position) ? button.position : index,
+            ));
+            const target = position ?? Array.from({ length: capacity }, (_, index) => index).find(index => !occupied.has(index));
+            if (target === undefined || target >= capacity || occupied.has(target)) return;
+            newButtonPosition = target;
+            openButtonDialog();
         }
 
     function readAction(row) {
@@ -565,6 +579,9 @@
             id,
             label: buttonForm.elements.namedItem("label").value.trim(),
             icon: buttonForm.elements.namedItem("icon").value.trim() || null,
+            position: editingButtonIndex === null
+                ? newButtonPosition
+                : (page.buttons[editingButtonIndex].position ?? editingButtonIndex),
             background_image: buttonForm.elements.namedItem("background_image").value.trim() || null,
             custom_css: buttonForm.elements.namedItem("custom_css").value.trim() || null,
             custom_html: buttonForm.elements.namedItem("custom_html").value || null,
@@ -577,6 +594,7 @@
     });
     dialog.addEventListener("close", () => {
         editingButtonIndex = null;
+        newButtonPosition = null;
         buttonForm.reset();
     });
     isDesktop.addEventListener("change", renderDeck);

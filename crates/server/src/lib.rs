@@ -238,7 +238,21 @@ fn validate_deck(deck: &ProtocolDeck) -> Result<(), String> {
                 page.name
             ));
         }
-        for button in &page.buttons {
+        let mut positions = std::collections::HashSet::new();
+        for (index, button) in page.buttons.iter().enumerate() {
+            let position = button.position.unwrap_or(index as u8);
+            if usize::from(position) >= capacity {
+                return Err(format!(
+                    "button {:?} has a position outside the grid",
+                    button.id
+                ));
+            }
+            if !positions.insert(position) {
+                return Err(format!(
+                    "page {:?} has multiple buttons in position {}",
+                    page.name, position
+                ));
+            }
             if button.id.trim().is_empty() || button.label.trim().is_empty() {
                 return Err("button IDs and labels cannot be empty".to_string());
             }
@@ -320,5 +334,22 @@ mod tests {
         deck.pages[0].buttons[0].custom_css = Some("background-image: url(https://attacker.invalid)".into());
 
         assert!(validate_deck(&deck).unwrap_err().contains("disallowed constructs"));
+    }
+
+    #[test]
+    fn rejects_duplicate_button_positions() {
+        let mut deck = deck_default_home();
+        deck.pages[0].buttons[0].position = Some(4);
+        deck.pages[0].buttons[1].position = Some(4);
+
+        assert!(validate_deck(&deck).unwrap_err().contains("multiple buttons in position"));
+    }
+
+    #[test]
+    fn rejects_button_positions_outside_the_grid() {
+        let mut deck = deck_default_home();
+        deck.pages[0].buttons[0].position = Some(15);
+
+        assert!(validate_deck(&deck).unwrap_err().contains("position outside the grid"));
     }
 }

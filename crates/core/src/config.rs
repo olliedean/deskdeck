@@ -31,6 +31,8 @@ struct ButtonFileOutput<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
     icon: &'a Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    position: &'a Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     background_image: &'a Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     custom_css: &'a Option<String>,
@@ -118,6 +120,7 @@ fn deck_file_output(deck: &Deck) -> DeckFileOutput<'_> {
                         id: &button.id,
                         label: &button.label,
                         icon: &button.icon,
+                        position: &button.position,
                         background_image: &button.background_image,
                         custom_css: &button.custom_css,
                         custom_html: &button.custom_html,
@@ -177,6 +180,7 @@ pub fn deck_default_home() -> Deck {
                     id: "home".to_string(),
                     label: "Desktop".to_string(),
                     icon: Some("fa-solid fa-desktop".to_string()),
+                    position: None,
                     background_image: None,
                     custom_css: None,
                     custom_html: None,
@@ -193,6 +197,7 @@ pub fn deck_default_home() -> Deck {
                     id: "mute".to_string(),
                     label: "Mute mic".to_string(),
                     icon: Some("fa-solid fa-microphone-slash".to_string()),
+                    position: None,
                     background_image: None,
                     custom_css: None,
                     custom_html: None,
@@ -209,6 +214,7 @@ pub fn deck_default_home() -> Deck {
                     id: "web".to_string(),
                     label: "Browser".to_string(),
                     icon: Some("fa-solid fa-globe".to_string()),
+                    position: None,
                     background_image: None,
                     custom_css: None,
                     custom_html: None,
@@ -287,6 +293,7 @@ mod tests {
             Some("background-color: #243447; color: white;".to_string());
         deck.pages[0].buttons[0].custom_html =
             Some("<strong>LIVE</strong><span>Scene 1</span>".to_string());
+        deck.pages[0].buttons[0].position = Some(7);
 
         deck_to_file(&path, &deck).expect("deck should save");
         let loaded = deck_from_file(&path).expect("saved deck should load");
@@ -304,6 +311,10 @@ mod tests {
         assert_eq!(
             loaded.pages[0].buttons[0].custom_html,
             deck.pages[0].buttons[0].custom_html
+        );
+        assert_eq!(
+            loaded.pages[0].buttons[0].position,
+            deck.pages[0].buttons[0].position
         );
         assert_eq!(
             loaded.pages[0].buttons[1].on_press[0].keys,

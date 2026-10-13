@@ -24,6 +24,8 @@ pub struct Button {
     pub id: String,
     pub label: String,
     pub icon: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub position: Option<u8>,
     #[serde(default)]
     pub background_image: Option<String>,
     #[serde(default)]
