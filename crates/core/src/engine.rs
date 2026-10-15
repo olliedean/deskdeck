@@ -98,9 +98,9 @@ impl Engine {
                 })
                 .ok_or_else(|| EngineError::ButtonNotFound(button_id.to_string()))?;
             button.state = if down {
-                ButtonState::Active
+                ButtonState::Pressed
             } else {
-                ButtonState::Idle
+                ButtonState::ToggledOff
             };
             if down {
                 button.actions.clone()
@@ -137,13 +137,13 @@ mod tests {
         assert_eq!(input.events().len(), 4);
         assert!(matches!(
             &engine.profile().await.pages[0].slots[0],
-            Slot::Button(button) if button.state == ButtonState::Active
+            Slot::Button(button) if button.state == ButtonState::Pressed
         ));
 
         engine.press("home", false).await.unwrap();
         assert!(matches!(
             &engine.profile().await.pages[0].slots[0],
-            Slot::Button(button) if button.state == ButtonState::Idle
+            Slot::Button(button) if button.state == ButtonState::ToggledOff
         ));
     }
 }

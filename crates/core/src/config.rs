@@ -1,3 +1,4 @@
+use crate::domain::{Border, BorderStyle, HorizontalAlignment, VerticalAlignment};
 use deskdeck_protocol::deck::{Action as ProtocolAction, Button, Deck, Grid, Page};
 use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
@@ -222,7 +223,9 @@ pub fn find_button<'a>(deck: &'a Deck, id: &'a str) -> Option<&'a Button> {
 #[cfg(test)]
 mod tests {
     use super::{deck_default_home, deck_from_file, deck_from_file_or_create, deck_to_file};
-    use crate::domain::{Profile, Slot};
+    use crate::domain::{
+        Border, BorderStyle, HorizontalAlignment, Profile, Slot, VerticalAlignment,
+    };
     use std::fs;
 
     fn test_path(name: &str) -> String {
@@ -323,10 +326,21 @@ on_press = [{ action = "hotkey", keys = ["ctrl", "d"] }]
         let Slot::Button(button) = &mut deck.pages[0].slots[0] else {
             panic!("default button should occupy first slot");
         };
-        button.appearance.background_image = Some("https://example.com/button.jpg".to_string());
-        button.appearance.custom_css = Some("background-color: #243447; color: white;".to_string());
-        button.appearance.custom_html =
-            Some("<strong>LIVE</strong><span>Scene 1</span>".to_string());
+        button.appearance.background_color = Some("https://example.com/button.jpg".to_string());
+        button.appearance.text_color = Some("background-color: #243447; color: white;".to_string());
+        button.appearance.font_size = Some(16);
+        button.appearance.horizontal_alignment = Some(HorizontalAlignment::Center);
+        button.appearance.vertical_alignment = Some(VerticalAlignment::Middle);
+        button.appearance.padding = Some(8);
+        button.appearance.corner_radius = Some(4);
+        button.appearance.border = Some(Border {
+            width: 2,
+            color: "#000000".to_string(),
+            style: BorderStyle::Solid,
+        });
+        button.appearance.opacity = Some(255);
+        button.appearance.badge_text = Some("NEW".to_string());
+        button.appearance.badge_color = Some("#ff0000".to_string());
         let (first, rest) = deck.pages[0].slots.split_at_mut(7);
         std::mem::swap(&mut first[0], &mut rest[0]);
 

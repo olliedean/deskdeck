@@ -5,7 +5,10 @@ mod ids;
 mod page;
 mod profile;
 
-pub use button::{ActionInstance, Button, ButtonAppearance, ButtonState};
+pub use button::{
+    ActionInstance, Border, BorderStyle, Button, ButtonAppearance, ButtonContent, ButtonState,
+    HorizontalAlignment, VerticalAlignment,
+};
 pub use error::DomainError;
 pub use grid::{GridPosition, GridSize, Slot};
 pub use ids::{ButtonId, PageId, ProfileId};

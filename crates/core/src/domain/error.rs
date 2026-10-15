@@ -27,4 +27,6 @@ pub enum DomainError {
     DuplicatePosition { page: String, position: usize },
     #[error("button position {position} is outside a grid with {capacity} slots")]
     PositionIndexOutOfBounds { position: usize, capacity: usize },
+    #[error("button content exceeds size limit of {limit} bytes")]
+    ContentSizeExceeded { limit: usize },
 }

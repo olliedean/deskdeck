@@ -60,6 +60,24 @@
         element.classList.add(...classes);
     }
 
+    function isAppearanceJson(text) {
+        if (!text || typeof text !== 'string' || !text.trim()) return false;
+        try {
+            const parsed = JSON.parse(text);
+            const appearanceFields = [
+                'font_size', 'horizontal_alignment', 'vertical_alignment',
+                'padding', 'corner_radius', 'border', 'opacity',
+                'badge_text', 'badge_color'
+            ];
+            const nullCount = appearanceFields.filter(field =>
+                parsed.hasOwnProperty(field) && parsed[field] === null
+            ).length;
+            return nullCount >= 3;
+        } catch (e) {
+            return false;
+        }
+    }
+
     function safeHttpUrl(value) {
         if (!value?.trim()) return null;
         try {
@@ -222,7 +240,7 @@
             element.setAttribute("aria-label", button.label);
             setButtonAppearance(element, button);
             if (draftDeck) element.setAttribute("role", "group");
-            if (button.custom_html?.trim()) {
+            if (button.custom_html?.trim() && !isAppearanceJson(button.custom_html)) {
                 const content = document.createElement("span");
                 content.className = "button-custom-content";
                 appendSafeHtml(content, button.custom_html);

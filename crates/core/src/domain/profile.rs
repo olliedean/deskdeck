@@ -1,11 +1,26 @@
 use super::{
-    ActionInstance, Button, ButtonAppearance, ButtonId, ButtonState, DomainError, GridSize, Page,
-    PageId, ProfileId, Slot,
+    ActionInstance, Border, BorderStyle, Button, ButtonAppearance, ButtonContent, ButtonId,
+    ButtonState, DomainError, GridSize, HorizontalAlignment, Page, PageId, ProfileId, Slot,
+    VerticalAlignment,
 };
 use deskdeck_protocol::deck::{
     Action as ProtocolAction, Button as ProtocolButton, Deck as ProtocolDeck, Grid as ProtocolGrid,
     Page as ProtocolPage,
 };
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct AppearanceExtensions {
+    font_size: Option<u8>,
+    horizontal_alignment: Option<HorizontalAlignment>,
+    vertical_alignment: Option<VerticalAlignment>,
+    padding: Option<u8>,
+    corner_radius: Option<u8>,
+    border: Option<Border>,
+    opacity: Option<u8>,
+    badge_text: Option<String>,
+    badge_color: Option<String>,
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Profile {
@@ -127,9 +142,36 @@ impl Profile {
                                 label: button.label.clone(),
                                 icon: button.appearance.icon.clone(),
                                 position: Some(position as u8),
-                                background_image: button.appearance.background_image.clone(),
-                                custom_css: button.appearance.custom_css.clone(),
-                                custom_html: button.appearance.custom_html.clone(),
+                                background_image: Some(
+                                    button
+                                        .appearance
+                                        .background_color
+                                        .clone()
+                                        .unwrap_or_default(),
+                                ),
+                                custom_css: Some(
+                                    button.appearance.text_color.clone().unwrap_or_default(),
+                                ),
+                                custom_html: {
+                                    let extensions = AppearanceExtensions {
+                                        font_size: button.appearance.font_size,
+                                        horizontal_alignment: button
+                                            .appearance
+                                            .horizontal_alignment
+                                            .clone(),
+                                        vertical_alignment: button
+                                            .appearance
+                                            .vertical_alignment
+                                            .clone(),
+                                        padding: button.appearance.padding,
+                                        corner_radius: button.appearance.corner_radius,
+                                        border: button.appearance.border.clone(),
+                                        opacity: button.appearance.opacity,
+                                        badge_text: button.appearance.badge_text.clone(),
+                                        badge_color: button.appearance.badge_color.clone(),
+                                    };
+                                    serde_json::to_string(&extensions).unwrap().into()
+                                },
                                 on_press: button.actions.iter().map(Into::into).collect(),
                             }),
                         })
@@ -167,16 +209,57 @@ impl From<&ActionInstance> for ProtocolAction {
 }
 
 fn button_from_protocol(button: ProtocolButton) -> Result<Button, DomainError> {
+    let extensions = match button.custom_html.as_deref() {
+        Some(html) => match serde_json::from_str::<AppearanceExtensions>(html) {
+            Ok(ext) => ext,
+            Err(_) => AppearanceExtensions {
+                font_size: None,
+                horizontal_alignment: None,
+                vertical_alignment: None,
+                padding: None,
+                corner_radius: None,
+                border: None,
+                opacity: None,
+                badge_text: None,
+                badge_color: None,
+            },
+        },
+        None => AppearanceExtensions {
+            font_size: None,
+            horizontal_alignment: None,
+            vertical_alignment: None,
+            padding: None,
+            corner_radius: None,
+            border: None,
+            opacity: None,
+            badge_text: None,
+            badge_color: None,
+        },
+    };
+
     Ok(Button {
         id: ButtonId::new(button.id)?,
         label: button.label,
         appearance: ButtonAppearance {
+            label: None,
             icon: button.icon,
-            background_image: button.background_image,
-            custom_css: button.custom_css,
-            custom_html: button.custom_html,
+            background_color: Some(button.background_image.unwrap_or_default()),
+            text_color: Some(button.custom_css.unwrap_or_default()),
+            font_size: extensions.font_size,
+            horizontal_alignment: extensions.horizontal_alignment,
+            vertical_alignment: extensions.vertical_alignment,
+            padding: extensions.padding,
+            corner_radius: extensions.corner_radius,
+            border: extensions.border,
+            opacity: extensions.opacity,
+            badge_text: extensions.badge_text,
+            badge_color: extensions.badge_color,
+        },
+        content: ButtonContent::Basic {
+            label: None,
+            icon: None,
         },
         actions: button.on_press.into_iter().map(Into::into).collect(),
-        state: ButtonState::Idle,
+        state: ButtonState::Default,
     })
 }
