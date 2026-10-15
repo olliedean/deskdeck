@@ -1,13 +1,15 @@
 use super::{
-    ActionInstance, Border, BorderStyle, Button, ButtonAppearance, ButtonContent, ButtonId,
-    ButtonState, DomainError, GridSize, HorizontalAlignment, Page, PageId, ProfileId, Slot,
-    VerticalAlignment,
+    ActionInstance, ActionInstanceId, Border, BorderStyle, Button, ButtonAppearance, ButtonContent,
+    ButtonId, ButtonState, DomainError, GridSize, HorizontalAlignment, Page, PageId, ProfileId,
+    Slot, VerticalAlignment,
 };
 use deskdeck_protocol::deck::{
     Action as ProtocolAction, Button as ProtocolButton, Deck as ProtocolDeck, Grid as ProtocolGrid,
     Page as ProtocolPage,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Map, Value};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 struct AppearanceExtensions {
@@ -192,18 +194,30 @@ impl TryFrom<ProtocolDeck> for Profile {
 
 impl From<ProtocolAction> for ActionInstance {
     fn from(action: ProtocolAction) -> Self {
-        Self {
-            kind: action.kind,
-            config: action.config,
-        }
+        let action_type = if action.kind.trim().is_empty() {
+            "unknown"
+        } else {
+            &action.kind
+        };
+        ActionInstance::new(action_type, Value::Object(action.config)).unwrap_or_else(|_| {
+            ActionInstance {
+                id: ActionInstanceId(Uuid::new_v4()),
+                action_type: "invalid".to_string(),
+                settings: json!({}),
+                enabled: false,
+            }
+        })
     }
 }
 
 impl From<&ActionInstance> for ProtocolAction {
     fn from(action: &ActionInstance) -> Self {
         Self {
-            kind: action.kind.clone(),
-            config: action.config.clone(),
+            kind: action.action_type.clone(),
+            config: match &action.settings {
+                Value::Object(map) => map.clone(),
+                _ => Map::new(),
+            },
         }
     }
 }

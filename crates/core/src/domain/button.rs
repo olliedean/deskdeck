@@ -1,6 +1,8 @@
 use super::{ButtonId, DomainError};
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::{json, Value};
+use sha1::{Digest, Sha1};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ButtonAppearance {
@@ -91,10 +93,45 @@ pub struct Button {
     pub state: ButtonState,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActionInstanceId(pub Uuid);
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActionInstance {
-    pub kind: String,
-    pub config: Map<String, Value>,
+    pub id: ActionInstanceId,
+    pub action_type: String,
+    pub settings: Value,
+    pub enabled: bool,
+}
+
+impl ActionInstance {
+    pub fn new(action_type: impl Into<String>, settings: Value) -> Result<Self, DomainError> {
+        let action_type = action_type.into().trim().to_string();
+        if action_type.is_empty() {
+            return Err(DomainError::EmptyName {
+                kind: "action_type",
+            });
+        }
+
+        let namespace = Uuid::parse_str("6ba7b810-9dad-11d1-80b4-00c04fd430c8").unwrap();
+        let name = action_type.as_bytes();
+        let mut hasher = Sha1::new();
+        hasher.update(namespace.as_bytes());
+        hasher.update(name);
+        let hash = hasher.finalize();
+        let mut id_bytes = [0u8; 16];
+        id_bytes.copy_from_slice(&hash[..16]);
+        id_bytes[6] = (id_bytes[6] & 0x0f) | 0x50;
+        id_bytes[8] = (id_bytes[8] & 0x3f) | 0x80;
+        let id = Uuid::from_bytes(id_bytes);
+
+        Ok(Self {
+            id: ActionInstanceId(id),
+            action_type,
+            settings,
+            enabled: true,
+        })
+    }
 }
 
 impl ButtonContent {
@@ -209,5 +246,60 @@ mod tests {
         assert_eq!(appearance.opacity, None);
         assert_eq!(appearance.badge_text, None);
         assert_eq!(appearance.badge_color, None);
+    }
+
+    #[test]
+    fn creating_action_instance() {
+        let action = ActionInstance::new("test_action", json!({ "param": "value" })).unwrap();
+        assert_eq!(action.action_type, "test_action");
+        assert_eq!(action.settings, json!({ "param": "value" }));
+        assert!(action.enabled);
+    }
+
+    #[test]
+    fn rejecting_empty_action_type() {
+        let result = ActionInstance::new("", json!({}));
+        assert!(matches!(
+            result,
+            Err(DomainError::EmptyName {
+                kind: "action_type"
+            })
+        ));
+
+        let result = ActionInstance::new("   ", json!({}));
+        assert!(matches!(
+            result,
+            Err(DomainError::EmptyName {
+                kind: "action_type"
+            })
+        ));
+
+        let result = ActionInstance::new("\t\n  ", json!({}));
+        assert!(matches!(
+            result,
+            Err(DomainError::EmptyName {
+                kind: "action_type"
+            })
+        ));
+    }
+
+    #[test]
+    fn action_instance_serialisation_round_trips() {
+        let original = ActionInstance::new("test_action", json!({ "key": "value" })).unwrap();
+        let serialized = serde_json::to_string(&original).unwrap();
+        let deserialized: ActionInstance = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(original, deserialized);
+
+        let original =
+            ActionInstance::new("another_action", json!({ "numbers": [1, 2, 3] })).unwrap();
+        let serialized = serde_json::to_string(&original).unwrap();
+        let deserialized: ActionInstance = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(original, deserialized);
+    }
+
+    #[test]
+    fn action_instance_defaults_enabled() {
+        let action = ActionInstance::new("test_action", json!({})).unwrap();
+        assert!(action.enabled);
     }
 }

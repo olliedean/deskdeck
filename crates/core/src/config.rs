@@ -1,11 +1,11 @@
-use crate::domain::{Border, BorderStyle, HorizontalAlignment, VerticalAlignment};
+use crate::domain::{
+    Border, BorderStyle, DomainError, HorizontalAlignment, Profile, VerticalAlignment,
+};
 use deskdeck_protocol::deck::{Action as ProtocolAction, Button, Deck, Grid, Page};
 use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
 use std::io::Write;
 use thiserror::Error;
-
-use crate::domain::{DomainError, Profile};
 
 #[derive(Serialize)]
 struct DeckFileOutput<'a> {
@@ -311,7 +311,13 @@ on_press = [{ action = "hotkey", keys = ["ctrl", "d"] }]
 
         assert_eq!(
             match &deck.pages[0].slots[0] {
-                Slot::Button(button) => button.actions[0].config["keys"].as_str(),
+                Slot::Button(button) => {
+                    let action = &button.actions[0];
+                    match &action.settings {
+                        serde_json::Value::Object(map) => map.get("keys").and_then(|v| v.as_str()),
+                        _ => None,
+                    }
+                }
                 Slot::Empty => None,
             },
             Some("ctrl, d")
