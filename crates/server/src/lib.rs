@@ -13,6 +13,7 @@ use tower_http::services::ServeDir;
 
 use deskdeck_core::engine::Engine;
 use deskdeck_core::config::deck_to_file;
+use deskdeck_core::domain::Profile;
 use deskdeck_core::input::InputBackend;
 use deskdeck_core::plugins::PluginRegistry;
 use deskdeck_protocol::deck::Deck as ProtocolDeck;
@@ -29,11 +30,12 @@ pub struct AppState {
 }
 
 pub fn create_app_state(
-    deck: ProtocolDeck,
+    profile: Profile,
     input: Arc<dyn InputBackend>,
     deck_path: PathBuf,
 ) -> Arc<AppState> {
-    let engine = Arc::new(Engine::new(deck.clone(), input));
+    let deck = profile.to_deck();
+    let engine = Arc::new(Engine::new(profile, input));
     let (tx, _rx) = tokio::sync::broadcast::channel(10);
     let _ = tx.send(deck);
 
@@ -207,10 +209,11 @@ async fn put_deck(
         return (StatusCode::BAD_REQUEST, error).into_response();
     }
 
-    if let Err(error) = deck_to_file(
-        state.deck_path.to_string_lossy().as_ref(),
-        &deck,
-    ) {
+    let profile = match Profile::try_from(deck.clone()) {
+        Ok(profile) => profile,
+        Err(error) => return (StatusCode::BAD_REQUEST, error.to_string()).into_response(),
+    };
+    if let Err(error) = deck_to_file(state.deck_path.to_string_lossy().as_ref(), &profile) {
         tracing::error!("failed to save deck configuration: {error}");
         return (
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -219,7 +222,7 @@ async fn put_deck(
             .into_response();
     }
 
-    state.engine.set_deck(deck.clone()).await;
+    state.engine.set_profile(profile).await;
     if let Err(error) = state.welcome_tx.send(deck.clone()) {
         tracing::warn!("deck saved, but no clients received the deck update: {error}");
     }
@@ -323,6 +326,7 @@ mod tests {
     use axum::Json;
     use deskdeck_core::{config::deck_default_home, input::FakeInput};
     use deskdeck_core::plugins::PluginRegistry;
+    use deskdeck_core::domain::Profile;
     use deskdeck_protocol::deck::Deck;
     use std::{path::PathBuf, sync::Arc};
 
@@ -330,10 +334,14 @@ mod tests {
         super::validate_deck(deck, &PluginRegistry::with_defaults())
     }
 
+    fn default_profile() -> Profile {
+        Profile::try_from(deck_default_home()).expect("default deck should be a valid profile")
+    }
+
     #[test]
     fn deck_route_supports_read_and_update_methods() {
         let state = create_app_state(
-            deck_default_home(),
+            default_profile(),
             Arc::new(FakeInput::new()),
             PathBuf::from("deck.toml"),
         );
@@ -343,7 +351,7 @@ mod tests {
     #[tokio::test]
     async fn action_catalog_exposes_plugin_field_definitions() {
         let state = create_app_state(
-            deck_default_home(),
+            default_profile(),
             Arc::new(FakeInput::new()),
             PathBuf::from("deck.toml"),
         );

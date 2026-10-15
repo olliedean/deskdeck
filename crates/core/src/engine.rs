@@ -1,14 +1,14 @@
 use deskdeck_protocol::client::HostMessage;
-use deskdeck_protocol::deck::Deck;
+use deskdeck_protocol::deck::{Action as ProtocolAction, Deck as ProtocolDeck};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::config::find_button;
+use crate::domain::{ButtonId, ButtonState, DomainError, Profile, Slot};
 use crate::input::InputBackend;
 use crate::plugins::{PluginError, PluginRegistry};
 
 pub struct Engine {
-    deck: Arc<RwLock<Deck>>,
+    profile: Arc<RwLock<Profile>>,
     input: Arc<dyn InputBackend>,
     plugins: PluginRegistry,
 }
@@ -18,6 +18,7 @@ pub enum EngineError {
     ButtonNotFound(String),
     Input(String),
     Plugin(String),
+    Domain(String),
 }
 
 impl From<crate::input::InputError> for EngineError {
@@ -35,25 +36,44 @@ impl From<PluginError> for EngineError {
     }
 }
 
+impl From<DomainError> for EngineError {
+    fn from(error: DomainError) -> Self {
+        EngineError::Domain(error.to_string())
+    }
+}
+
 impl Engine {
-    pub fn new(deck: Deck, input: Arc<dyn InputBackend>) -> Self {
-        Self::with_plugins(deck, input, PluginRegistry::with_defaults())
+    pub fn new(profile: Profile, input: Arc<dyn InputBackend>) -> Self {
+        Self::with_plugins(profile, input, PluginRegistry::with_defaults())
     }
 
-    pub fn with_plugins(deck: Deck, input: Arc<dyn InputBackend>, plugins: PluginRegistry) -> Self {
+    pub fn with_plugins(
+        profile: Profile,
+        input: Arc<dyn InputBackend>,
+        plugins: PluginRegistry,
+    ) -> Self {
         Engine {
-            deck: Arc::new(RwLock::new(deck)),
+            profile: Arc::new(RwLock::new(profile)),
             input,
             plugins,
         }
     }
 
-    pub async fn deck(&self) -> Deck {
-        self.deck.read().await.clone()
+    pub async fn profile(&self) -> Profile {
+        self.profile.read().await.clone()
     }
 
-    pub async fn set_deck(&self, deck: Deck) {
-        *self.deck.write().await = deck;
+    pub async fn deck(&self) -> ProtocolDeck {
+        self.profile.read().await.to_deck()
+    }
+
+    pub async fn set_profile(&self, profile: Profile) {
+        *self.profile.write().await = profile;
+    }
+
+    pub async fn set_deck(&self, deck: ProtocolDeck) -> Result<(), DomainError> {
+        self.set_profile(Profile::try_from(deck)?).await;
+        Ok(())
     }
 
     pub fn plugins(&self) -> &PluginRegistry {
@@ -65,20 +85,65 @@ impl Engine {
         button_id: &str,
         down: bool,
     ) -> Result<Vec<HostMessage>, EngineError> {
-        if !down {
-            return Ok(vec![]);
-        }
-
         let actions = {
-            let deck = self.deck.read().await;
-            find_button(&deck, button_id)
-                .map(|button| button.on_press.clone())
-                .ok_or_else(|| EngineError::ButtonNotFound(button_id.to_string()))?
+            let mut profile = self.profile.write().await;
+            let id = ButtonId::new(button_id.to_string())?;
+            let button = profile
+                .pages
+                .iter_mut()
+                .flat_map(|page| page.slots.iter_mut())
+                .find_map(|slot| match slot {
+                    Slot::Button(button) if button.id == id => Some(button),
+                    _ => None,
+                })
+                .ok_or_else(|| EngineError::ButtonNotFound(button_id.to_string()))?;
+            button.state = if down {
+                ButtonState::Active
+            } else {
+                ButtonState::Idle
+            };
+            if down {
+                button.actions.clone()
+            } else {
+                return Ok(vec![]);
+            }
         };
 
         for action in &actions {
-            self.plugins.execute(action, self.input.as_ref()).await?;
+            let action = ProtocolAction::from(action);
+            self.plugins.execute(&action, self.input.as_ref()).await?;
         }
         Ok(vec![])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Engine;
+    use crate::{
+        config::deck_default_home,
+        domain::{ButtonState, Profile, Slot},
+        input::FakeInput,
+    };
+    use std::sync::Arc;
+
+    #[tokio::test]
+    async fn press_updates_runtime_button_state_and_executes_actions() {
+        let profile = Profile::try_from(deck_default_home()).unwrap();
+        let input = Arc::new(FakeInput::new());
+        let engine = Engine::new(profile, input.clone());
+
+        engine.press("home", true).await.unwrap();
+        assert_eq!(input.events().len(), 4);
+        assert!(matches!(
+            &engine.profile().await.pages[0].slots[0],
+            Slot::Button(button) if button.state == ButtonState::Active
+        ));
+
+        engine.press("home", false).await.unwrap();
+        assert!(matches!(
+            &engine.profile().await.pages[0].slots[0],
+            Slot::Button(button) if button.state == ButtonState::Idle
+        ));
     }
 }

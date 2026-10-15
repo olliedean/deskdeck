@@ -4,6 +4,8 @@ use std::fs::OpenOptions;
 use std::io::Write;
 use thiserror::Error;
 
+use crate::domain::{DomainError, Profile};
+
 #[derive(Serialize)]
 struct DeckFileOutput<'a> {
     deck: DeckMetadataOutput<'a>,
@@ -71,9 +73,11 @@ pub enum ConfigError {
     Io(#[from] std::io::Error),
     #[error("failed to serialize default deck: {0}")]
     Serialize(#[from] toml::ser::Error),
+    #[error("invalid profile: {0}")]
+    Domain(#[from] DomainError),
 }
 
-pub fn deck_from_file_or_create(path: &str) -> Result<Deck, ConfigError> {
+pub fn deck_from_file_or_create(path: &str) -> Result<Profile, ConfigError> {
     match OpenOptions::new().write(true).create_new(true).open(path) {
         Ok(mut file) => {
             let deck = deck_default_home();
@@ -117,10 +121,10 @@ fn deck_file_output(deck: &Deck) -> DeckFileOutput<'_> {
     }
 }
 
-pub fn deck_from_file(path: &str) -> Result<Deck, ConfigError> {
+pub fn deck_from_file(path: &str) -> Result<Profile, ConfigError> {
     let contents = std::fs::read_to_string(path)?;
     let file: DeckFile = toml::from_str(&contents)?;
-    Ok(Deck {
+    Ok(Profile::try_from(Deck {
         name: file.deck.name,
         grid: file.deck.grid,
         pages: file
@@ -131,11 +135,12 @@ pub fn deck_from_file(path: &str) -> Result<Deck, ConfigError> {
                 buttons: page.buttons,
             })
             .collect(),
-    })
+    })?)
 }
 
-pub fn deck_to_file(path: &str, deck: &Deck) -> Result<(), ConfigError> {
-    let contents = toml::to_string_pretty(&deck_file_output(deck))?;
+pub fn deck_to_file(path: &str, profile: &Profile) -> Result<(), ConfigError> {
+    let deck = profile.to_deck();
+    let contents = toml::to_string_pretty(&deck_file_output(&deck))?;
     let path = std::path::Path::new(path);
     let temp_path = path.with_extension("toml.tmp");
     std::fs::write(&temp_path, contents)?;
@@ -203,6 +208,10 @@ pub fn deck_default_home() -> Deck {
     }
 }
 
+pub fn profile_default_home() -> Result<Profile, ConfigError> {
+    Profile::try_from(deck_default_home()).map_err(Into::into)
+}
+
 pub fn find_button<'a>(deck: &'a Deck, id: &'a str) -> Option<&'a Button> {
     deck.pages.iter().flat_map(|p| p.buttons.iter()).find(|b| b.id == id)
 }
@@ -210,6 +219,7 @@ pub fn find_button<'a>(deck: &'a Deck, id: &'a str) -> Option<&'a Button> {
 #[cfg(test)]
 mod tests {
     use super::{deck_default_home, deck_from_file, deck_from_file_or_create, deck_to_file};
+    use crate::domain::{Profile, Slot};
     use std::fs;
 
     fn test_path(name: &str) -> String {
@@ -226,15 +236,31 @@ mod tests {
 
         let deck = deck_from_file_or_create(&path).expect("missing deck should be generated");
         assert_eq!(deck.name, "Main");
-        assert_eq!(deck.pages[0].buttons.len(), 3);
         assert_eq!(
-            deck.pages[0].buttons[0].icon.as_deref(),
+            deck.pages[0]
+                .slots
+                .iter()
+                .filter(|slot| matches!(slot, Slot::Button(_)))
+                .count(),
+            3
+        );
+        assert_eq!(
+            match &deck.pages[0].slots[0] {
+                Slot::Button(button) => button.appearance.icon.as_deref(),
+                Slot::Empty => None,
+            },
             Some("fa-solid fa-desktop")
         );
-        let default_deck = deck_default_home();
+        let default_deck = Profile::try_from(deck_default_home()).unwrap();
         assert_eq!(
-            deck.pages[0].buttons[1].id,
-            default_deck.pages[0].buttons[1].id
+            match &deck.pages[0].slots[1] {
+                Slot::Button(button) => button.id.as_str(),
+                Slot::Empty => "",
+            },
+            match &default_deck.pages[0].slots[1] {
+                Slot::Button(button) => button.id.as_str(),
+                Slot::Empty => "",
+            }
         );
 
         fs::remove_file(path).expect("generated test deck should be removed");
@@ -248,7 +274,10 @@ mod tests {
 
         let deck = deck_from_file_or_create(&path).expect("existing deck should load");
         assert_eq!(deck.name, "Custom");
-        assert_eq!(deck.pages[0].buttons[0].id, "custom");
+        assert!(matches!(
+            &deck.pages[0].slots[0],
+            Slot::Button(button) if button.id.as_str() == "custom"
+        ));
         assert_eq!(fs::read_to_string(&path).unwrap(), contents);
 
         fs::remove_file(path).expect("test deck should be removed");
@@ -275,8 +304,11 @@ on_press = [{ action = "hotkey", keys = ["ctrl", "d"] }]
         let deck = deck_from_file(&path).expect("legacy action should load");
 
         assert_eq!(
-            deck.pages[0].buttons[0].on_press[0].config["keys"],
-            serde_json::Value::String("ctrl, d".to_string())
+            match &deck.pages[0].slots[0] {
+                Slot::Button(button) => button.actions[0].config["keys"].as_str(),
+                Slot::Empty => None,
+            },
+            Some("ctrl, d")
         );
         fs::remove_file(path).expect("legacy test deck should be removed");
     }
@@ -284,40 +316,24 @@ on_press = [{ action = "hotkey", keys = ["ctrl", "d"] }]
     #[test]
     fn saves_deck_and_can_load_it_again() {
         let path = test_path("saved");
-        let mut deck = deck_default_home();
-        deck.pages[0].buttons[0].background_image =
+        let mut deck = Profile::try_from(deck_default_home()).unwrap();
+        let Slot::Button(button) = &mut deck.pages[0].slots[0] else {
+            panic!("default button should occupy first slot");
+        };
+        button.appearance.background_image =
             Some("https://example.com/button.jpg".to_string());
-        deck.pages[0].buttons[0].custom_css =
+        button.appearance.custom_css =
             Some("background-color: #243447; color: white;".to_string());
-        deck.pages[0].buttons[0].custom_html =
+        button.appearance.custom_html =
             Some("<strong>LIVE</strong><span>Scene 1</span>".to_string());
-        deck.pages[0].buttons[0].position = Some(7);
+        let (first, rest) = deck.pages[0].slots.split_at_mut(7);
+        std::mem::swap(&mut first[0], &mut rest[0]);
 
         deck_to_file(&path, &deck).expect("deck should save");
         let loaded = deck_from_file(&path).expect("saved deck should load");
 
         assert_eq!(loaded.name, deck.name);
-        assert_eq!(loaded.pages[0].buttons.len(), deck.pages[0].buttons.len());
-        assert_eq!(
-            loaded.pages[0].buttons[0].background_image,
-            deck.pages[0].buttons[0].background_image
-        );
-        assert_eq!(
-            loaded.pages[0].buttons[0].custom_css,
-            deck.pages[0].buttons[0].custom_css
-        );
-        assert_eq!(
-            loaded.pages[0].buttons[0].custom_html,
-            deck.pages[0].buttons[0].custom_html
-        );
-        assert_eq!(
-            loaded.pages[0].buttons[0].position,
-            deck.pages[0].buttons[0].position
-        );
-        assert_eq!(
-            loaded.pages[0].buttons[1].on_press[0].config,
-            deck.pages[0].buttons[1].on_press[0].config
-        );
+        assert_eq!(loaded, deck);
 
         fs::remove_file(path).expect("saved test deck should be removed");
     }
