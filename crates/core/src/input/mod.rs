@@ -36,7 +36,9 @@ pub enum FakeEventKind {
 
 impl FakeInput {
     pub fn new() -> Self {
-        FakeInput { events: std::sync::Mutex::new(Vec::new()) }
+        FakeInput {
+            events: std::sync::Mutex::new(Vec::new()),
+        }
     }
 
     pub fn events(&self) -> Vec<FakeEvent> {
@@ -51,12 +53,18 @@ impl FakeInput {
 #[async_trait]
 impl InputBackend for FakeInput {
     async fn key_down(&self, key: &str) -> Result<(), InputError> {
-        self.events.lock().unwrap().push(FakeEvent { kind: FakeEventKind::KeyDown, key: key.to_string() });
+        self.events.lock().unwrap().push(FakeEvent {
+            kind: FakeEventKind::KeyDown,
+            key: key.to_string(),
+        });
         Ok(())
     }
 
     async fn key_up(&self, key: &str) -> Result<(), InputError> {
-        self.events.lock().unwrap().push(FakeEvent { kind: FakeEventKind::KeyUp, key: key.to_string() });
+        self.events.lock().unwrap().push(FakeEvent {
+            kind: FakeEventKind::KeyUp,
+            key: key.to_string(),
+        });
         Ok(())
     }
 
@@ -67,7 +75,10 @@ impl InputBackend for FakeInput {
     }
 
     async fn type_text(&self, text: &str) -> Result<(), InputError> {
-        self.events.lock().unwrap().push(FakeEvent { kind: FakeEventKind::Type, key: text.to_string() });
+        self.events.lock().unwrap().push(FakeEvent {
+            kind: FakeEventKind::Type,
+            key: text.to_string(),
+        });
         Ok(())
     }
 }

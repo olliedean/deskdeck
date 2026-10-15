@@ -2,7 +2,7 @@ use super::{ActionDefinition, ActionField, ActionFieldType, ActionPlugin, Plugin
 use crate::input::InputBackend;
 use async_trait::async_trait;
 use serde_json::{Map, Value};
-use tokio::process::Command;
+use std::process::Command;
 
 pub struct CommandPlugin;
 
@@ -40,7 +40,7 @@ impl ActionPlugin for CommandPlugin {
             .map_err(|error| PluginError::Operation(format!("start command: {error}")))?;
 
         tokio::spawn(async move {
-            if let Err(error) = child.wait().await {
+            if let Err(error) = child.wait() {
                 eprintln!("DeskDeck command plugin failed waiting for child: {error}");
             }
         });

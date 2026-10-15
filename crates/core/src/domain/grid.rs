@@ -14,8 +14,17 @@ impl GridSize {
         Ok(Self { columns, rows })
     }
 
-    pub fn capacity(self) -> usize {
+    #[allow(clippy::len_without_is_empty)]
+    pub fn len(self) -> usize {
         usize::from(self.columns) * usize::from(self.rows)
+    }
+
+    pub fn capacity(self) -> usize {
+        self.len()
+    }
+
+    pub fn contains(self, position: GridPosition) -> bool {
+        position.column < self.columns && position.row < self.rows
     }
 }
 
@@ -52,7 +61,13 @@ impl GridPosition {
     }
 
     pub fn index(self, grid: GridSize) -> Result<usize, DomainError> {
-        Self::new(self.column, self.row, grid)?;
+        if grid.contains(self) == false {
+            return Err(DomainError::PositionIndexOutOfBounds {
+                position: usize::from(self.row) * usize::from(grid.columns)
+                    + usize::from(self.column),
+                capacity: grid.capacity(),
+            });
+        }
         Ok(usize::from(self.row) * usize::from(grid.columns) + usize::from(self.column))
     }
 }

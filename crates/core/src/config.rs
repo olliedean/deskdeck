@@ -204,7 +204,7 @@ pub fn deck_default_home() -> Deck {
                     }],
                 },
             ],
-        }]
+        }],
     }
 }
 
@@ -213,7 +213,10 @@ pub fn profile_default_home() -> Result<Profile, ConfigError> {
 }
 
 pub fn find_button<'a>(deck: &'a Deck, id: &'a str) -> Option<&'a Button> {
-    deck.pages.iter().flat_map(|p| p.buttons.iter()).find(|b| b.id == id)
+    deck.pages
+        .iter()
+        .flat_map(|p| p.buttons.iter())
+        .find(|b| b.id == id)
 }
 
 #[cfg(test)]
@@ -255,11 +258,11 @@ mod tests {
         assert_eq!(
             match &deck.pages[0].slots[1] {
                 Slot::Button(button) => button.id.as_str(),
-                Slot::Empty => "",
+                Slot::Empty => "".to_string(),
             },
             match &default_deck.pages[0].slots[1] {
                 Slot::Button(button) => button.id.as_str(),
-                Slot::Empty => "",
+                Slot::Empty => "".to_string(),
             }
         );
 
@@ -276,7 +279,7 @@ mod tests {
         assert_eq!(deck.name, "Custom");
         assert!(matches!(
             &deck.pages[0].slots[0],
-            Slot::Button(button) if button.id.as_str() == "custom"
+            Slot::Button(button) if button.id.as_str() == "custom".to_string()
         ));
         assert_eq!(fs::read_to_string(&path).unwrap(), contents);
 
@@ -320,10 +323,8 @@ on_press = [{ action = "hotkey", keys = ["ctrl", "d"] }]
         let Slot::Button(button) = &mut deck.pages[0].slots[0] else {
             panic!("default button should occupy first slot");
         };
-        button.appearance.background_image =
-            Some("https://example.com/button.jpg".to_string());
-        button.appearance.custom_css =
-            Some("background-color: #243447; color: white;".to_string());
+        button.appearance.background_image = Some("https://example.com/button.jpg".to_string());
+        button.appearance.custom_css = Some("background-color: #243447; color: white;".to_string());
         button.appearance.custom_html =
             Some("<strong>LIVE</strong><span>Scene 1</span>".to_string());
         let (first, rest) = deck.pages[0].slots.split_at_mut(7);

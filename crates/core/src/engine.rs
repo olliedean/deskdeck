@@ -1,7 +1,7 @@
 use deskdeck_protocol::client::HostMessage;
 use deskdeck_protocol::deck::{Action as ProtocolAction, Deck as ProtocolDeck};
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use std::sync::RwLock;
 
 use crate::domain::{ButtonId, ButtonState, DomainError, Profile, Slot};
 use crate::input::InputBackend;
@@ -60,15 +60,15 @@ impl Engine {
     }
 
     pub async fn profile(&self) -> Profile {
-        self.profile.read().await.clone()
+        self.profile.read().expect("Poisoned RwLock").clone()
     }
 
     pub async fn deck(&self) -> ProtocolDeck {
-        self.profile.read().await.to_deck()
+        self.profile.read().expect("Poisoned RwLock").to_deck()
     }
 
     pub async fn set_profile(&self, profile: Profile) {
-        *self.profile.write().await = profile;
+        *self.profile.write().expect("Poisoned RwLock") = profile;
     }
 
     pub async fn set_deck(&self, deck: ProtocolDeck) -> Result<(), DomainError> {
@@ -86,7 +86,7 @@ impl Engine {
         down: bool,
     ) -> Result<Vec<HostMessage>, EngineError> {
         let actions = {
-            let mut profile = self.profile.write().await;
+            let mut profile = self.profile.write().expect("Poisoned RwLock");
             let id = ButtonId::new(button_id.to_string())?;
             let button = profile
                 .pages

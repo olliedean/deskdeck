@@ -2,25 +2,26 @@ use axum::{
     extract::{ConnectInfo, Path, State, WebSocketUpgrade},
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json, Router, routing::get,
+    routing::get,
+    Json, Router,
 };
 use futures_util::{SinkExt, StreamExt};
-use std::sync::Arc;
-use std::path::PathBuf;
 use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower_http::services::ServeDir;
 
-use deskdeck_core::engine::Engine;
 use deskdeck_core::config::deck_to_file;
 use deskdeck_core::domain::Profile;
+use deskdeck_core::engine::Engine;
 use deskdeck_core::input::InputBackend;
 use deskdeck_core::plugins::PluginRegistry;
+use deskdeck_protocol::client::{
+    ButtonState, ClientMessage, Hello, HostError, HostMessage, Press, StatePatch, Welcome,
+};
 use deskdeck_protocol::deck::Deck as ProtocolDeck;
 use deskdeck_protocol::deck::Page;
-use deskdeck_protocol::client::{
-    ClientMessage, HostError, HostMessage, Hello, Press, StatePatch, Welcome, ButtonState,
-};
 
 pub struct AppState {
     pub engine: Arc<Engine>,
@@ -81,10 +82,7 @@ fn make_welcome(deck: &ProtocolDeck) -> Welcome {
     }
 }
 
-async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<Arc<AppState>>,
-) -> Response {
+async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> Response {
     ws.on_upgrade(|socket| async move {
         let (mut tx, mut rx) = socket.split();
         let mut deck_updates = state.welcome_tx.subscribe();
@@ -167,7 +165,11 @@ async fn ws_handler(
 
 async fn pairing(State(state): State<Arc<AppState>>) -> Response {
     let token = uuid::Uuid::new_v4().to_string();
-    state.tokens.write().await.insert(token.clone(), token.clone());
+    state
+        .tokens
+        .write()
+        .await
+        .insert(token.clone(), token.clone());
     let qr = qrcode::QrCode::new(&token).unwrap();
     let svg = qr.render::<&str>().build();
     (axum::http::StatusCode::OK, svg).into_response()
@@ -290,8 +292,15 @@ fn validate_deck(deck: &ProtocolDeck, plugins: &PluginRegistry) -> Result<(), St
                     button.id
                 ));
             }
-            if button.custom_html.as_ref().is_some_and(|html| html.len() > 32768) {
-                return Err(format!("custom HTML is too long for button {:?}", button.id));
+            if button
+                .custom_html
+                .as_ref()
+                .is_some_and(|html| html.len() > 32768)
+            {
+                return Err(format!(
+                    "custom HTML is too long for button {:?}",
+                    button.id
+                ));
             }
             if !ids.insert(button.id.as_str()) {
                 return Err(format!("duplicate button ID: {}", button.id));
@@ -324,9 +333,9 @@ async fn get_page(Path(page): Path<String>, State(state): State<Arc<AppState>>) 
 mod tests {
     use super::{create_app_state, router};
     use axum::Json;
-    use deskdeck_core::{config::deck_default_home, input::FakeInput};
-    use deskdeck_core::plugins::PluginRegistry;
     use deskdeck_core::domain::Profile;
+    use deskdeck_core::plugins::PluginRegistry;
+    use deskdeck_core::{config::deck_default_home, input::FakeInput};
     use deskdeck_protocol::deck::Deck;
     use std::{path::PathBuf, sync::Arc};
 
@@ -370,15 +379,20 @@ mod tests {
         let mut deck = deck_default_home();
         deck.pages[0].buttons[1].id = deck.pages[0].buttons[0].id.clone();
 
-        assert!(validate_deck(&deck).unwrap_err().contains("duplicate button ID"));
+        assert!(validate_deck(&deck)
+            .unwrap_err()
+            .contains("duplicate button ID"));
     }
 
     #[test]
     fn rejects_active_css_content_in_custom_styles() {
         let mut deck = deck_default_home();
-        deck.pages[0].buttons[0].custom_css = Some("background-image: url(https://attacker.invalid)".into());
+        deck.pages[0].buttons[0].custom_css =
+            Some("background-image: url(https://attacker.invalid)".into());
 
-        assert!(validate_deck(&deck).unwrap_err().contains("disallowed constructs"));
+        assert!(validate_deck(&deck)
+            .unwrap_err()
+            .contains("disallowed constructs"));
     }
 
     #[test]
@@ -387,7 +401,9 @@ mod tests {
         deck.pages[0].buttons[0].position = Some(4);
         deck.pages[0].buttons[1].position = Some(4);
 
-        assert!(validate_deck(&deck).unwrap_err().contains("multiple buttons in position"));
+        assert!(validate_deck(&deck)
+            .unwrap_err()
+            .contains("multiple buttons in position"));
     }
 
     #[test]
@@ -395,7 +411,9 @@ mod tests {
         let mut deck = deck_default_home();
         deck.pages[0].buttons[0].position = Some(15);
 
-        assert!(validate_deck(&deck).unwrap_err().contains("position outside the grid"));
+        assert!(validate_deck(&deck)
+            .unwrap_err()
+            .contains("position outside the grid"));
     }
 
     #[test]
