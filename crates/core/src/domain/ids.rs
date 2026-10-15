@@ -1,11 +1,12 @@
 use super::DomainError;
 use once_cell::sync::Lazy;
+use serde::{Deserialize, Serialize};
 use sha1::{Digest, Sha1};
 use uuid::{Builder, Bytes, Uuid};
 
 macro_rules! define_uuid_id {
     ($name:ident, $kind:literal) => {
-        #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+        #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
         pub struct $name {
             uuid: Uuid,
             original_string: String,

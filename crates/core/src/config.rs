@@ -8,41 +8,25 @@ use std::io::Write;
 use thiserror::Error;
 
 #[derive(Serialize)]
-struct DeckFileOutput<'a> {
-    deck: DeckMetadataOutput<'a>,
+struct DeckFileOutput {
+    deck: DeckMetadataOutput,
     #[serde(rename = "page")]
-    pages: Vec<PageFileOutput<'a>>,
+    pages: Vec<PageFileOutput>,
 }
 
 #[derive(Serialize)]
-struct DeckMetadataOutput<'a> {
-    name: &'a str,
-    grid: &'a Grid,
+struct DeckMetadataOutput {
+    name: String,
+    grid: Grid,
 }
 
 #[derive(Serialize)]
-struct PageFileOutput<'a> {
-    name: &'a str,
+struct PageFileOutput {
+    name: String,
     #[serde(rename = "button")]
-    buttons: Vec<ButtonFileOutput<'a>>,
+    buttons: Vec<Button>,
 }
 
-#[derive(Serialize)]
-struct ButtonFileOutput<'a> {
-    id: &'a str,
-    label: &'a str,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    icon: &'a Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    position: &'a Option<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    background_image: &'a Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    custom_css: &'a Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    custom_html: &'a Option<String>,
-    on_press: &'a [ProtocolAction],
-}
 
 #[derive(Deserialize)]
 struct DeckFile {
@@ -92,31 +76,18 @@ pub fn deck_from_file_or_create(path: &str) -> Result<Profile, ConfigError> {
     deck_from_file(path)
 }
 
-fn deck_file_output(deck: &Deck) -> DeckFileOutput<'_> {
+fn deck_file_output(deck: &Deck) -> DeckFileOutput {
     DeckFileOutput {
         deck: DeckMetadataOutput {
-            name: &deck.name,
-            grid: &deck.grid,
+            name: deck.name.clone(),
+            grid: deck.grid.clone(),
         },
         pages: deck
             .pages
             .iter()
             .map(|page| PageFileOutput {
-                name: &page.name,
-                buttons: page
-                    .buttons
-                    .iter()
-                    .map(|button| ButtonFileOutput {
-                        id: &button.id,
-                        label: &button.label,
-                        icon: &button.icon,
-                        position: &button.position,
-                        background_image: &button.background_image,
-                        custom_css: &button.custom_css,
-                        custom_html: &button.custom_html,
-                        on_press: &button.on_press,
-                    })
-                    .collect(),
+                name: page.name.clone(),
+                buttons: page.buttons.clone(),
             })
             .collect(),
     }

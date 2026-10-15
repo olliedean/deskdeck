@@ -2,6 +2,7 @@ use super::{ButtonId, DomainError};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha1::{Digest, Sha1};
+use std::time::SystemTime;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -91,6 +92,9 @@ pub struct Button {
     pub content: ButtonContent,
     pub actions: Vec<ActionInstance>,
     pub state: ButtonState,
+    pub enabled: bool,
+    pub created_at: SystemTime,
+    pub updated_at: SystemTime,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -156,6 +160,293 @@ impl ButtonContent {
         }
 
         Ok(ButtonContent::Custom { markup, css })
+    }
+}
+
+impl Button {
+    pub fn new(id: ButtonId, label: String) -> Self {
+        let now = SystemTime::now();
+        Self {
+            id,
+            label,
+            appearance: ButtonAppearance::default(),
+            content: ButtonContent::default(),
+            actions: Vec::new(),
+            state: ButtonState::Default,
+            enabled: true,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    pub fn enable(&mut self) {
+        self.enabled = true;
+        self.updated_at = SystemTime::now();
+    }
+
+    pub fn disable(&mut self) {
+        self.enabled = false;
+        self.updated_at = SystemTime::now();
+    }
+
+    pub fn update_appearance(&mut self, appearance: ButtonAppearance) {
+        self.appearance = appearance;
+        self.updated_at = SystemTime::now();
+    }
+
+    pub fn update_content(&mut self, content: ButtonContent) {
+        self.content = content;
+        self.updated_at = SystemTime::now();
+    }
+
+    pub fn update_state(&mut self, state: ButtonState) {
+        self.state = state;
+        self.updated_at = SystemTime::now();
+    }
+
+    pub fn add_action(&mut self, action: ActionInstance) -> Result<(), DomainError> {
+        if self.actions.iter().any(|a| a.id == action.id) {
+            return Err(DomainError::InvalidId { kind: "action" });
+        }
+        self.actions.push(action);
+        self.updated_at = SystemTime::now();
+        Ok(())
+    }
+
+    pub fn remove_action(&mut self, id: &ActionInstanceId) -> Result<(), DomainError> {
+        let initial_len = self.actions.len();
+        self.actions.retain(|a| &a.id != id);
+        if self.actions.len() == initial_len {
+            return Err(DomainError::InvalidId { kind: "action" });
+        }
+        self.updated_at = SystemTime::now();
+        Ok(())
+    }
+
+    pub fn reorder_actions(&mut self, ids: &[ActionInstanceId]) -> Result<(), DomainError> {
+        for id in ids {
+            if !self.actions.iter().any(|a| &a.id == id) {
+                return Err(DomainError::InvalidId { kind: "action" });
+            }
+        }
+
+        if ids.len() != self.actions.len() {
+            return Err(DomainError::InvalidId { kind: "action" });
+        }
+
+        let mut reordered = Vec::with_capacity(ids.len());
+        for id in ids {
+            if let Some(pos) = self.actions.iter().position(|a| &a.id == id) {
+                reordered.push(self.actions.remove(pos));
+            }
+        }
+        self.actions = reordered;
+        self.updated_at = SystemTime::now();
+        Ok(())
+    }
+
+    pub fn enable_action(&mut self, id: &ActionInstanceId) -> Result<(), DomainError> {
+        if let Some(action) = self.actions.iter_mut().find(|a| &a.id == id) {
+            action.enabled = true;
+            self.updated_at = SystemTime::now();
+            Ok(())
+        } else {
+            Err(DomainError::InvalidId { kind: "action" })
+        }
+    }
+
+    pub fn disable_action(&mut self, id: &ActionInstanceId) -> Result<(), DomainError> {
+        if let Some(action) = self.actions.iter_mut().find(|a| &a.id == id) {
+            action.enabled = false;
+            self.updated_at = SystemTime::now();
+            Ok(())
+        } else {
+            Err(DomainError::InvalidId { kind: "action" })
+        }
+    }
+}
+
+impl Serialize for Button {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("Button", 9)?;
+        state.serialize_field("id", &self.id)?;
+        state.serialize_field("label", &self.label)?;
+        state.serialize_field("appearance", &self.appearance)?;
+        state.serialize_field("content", &self.content)?;
+        state.serialize_field("actions", &self.actions)?;
+        state.serialize_field("state", &self.state)?;
+        state.serialize_field("enabled", &self.enabled)?;
+        state.serialize_field("created_at", &self.created_at)?;
+        state.serialize_field("updated_at", &self.updated_at)?;
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for Button {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[allow(non_camel_case_types)]
+        enum Field {
+            id,
+            label,
+            appearance,
+            content,
+            actions,
+            state,
+            enabled,
+            created_at,
+            updated_at,
+        }
+        impl<'de> Deserialize<'de> for Field {
+            fn deserialize<D>(deserializer: D) -> Result<Field, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct FieldVisitor;
+                impl<'de> serde::de::Visitor<'de> for FieldVisitor {
+                    type Value = Field;
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                        formatter.write_str("`id`, `label`, `appearance`, `content`, `actions`, `state`, `enabled`, `created_at`, or `updated_at`")
+                    }
+                    fn visit_str<E>(self, value: &str) -> Result<Field, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "id" => Ok(Field::id),
+                            "label" => Ok(Field::label),
+                            "appearance" => Ok(Field::appearance),
+                            "content" => Ok(Field::content),
+                            "actions" => Ok(Field::actions),
+                            "state" => Ok(Field::state),
+                            "enabled" => Ok(Field::enabled),
+                            "created_at" => Ok(Field::created_at),
+                            "updated_at" => Ok(Field::updated_at),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(FieldVisitor)
+            }
+        }
+        struct ButtonVisitor;
+        impl<'de> serde::de::Visitor<'de> for ButtonVisitor {
+            type Value = Button;
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("struct Button")
+            }
+            fn visit_map<V>(self, mut map: V) -> Result<Button, V::Error>
+            where
+                V: serde::de::MapAccess<'de>,
+            {
+                let mut id: Option<ButtonId> = None;
+                let mut label: Option<String> = None;
+                let mut appearance: Option<ButtonAppearance> = None;
+                let mut content: Option<ButtonContent> = None;
+                let mut actions: Option<Vec<ActionInstance>> = None;
+                let mut state: Option<ButtonState> = None;
+                let mut enabled: Option<bool> = None;
+                let mut created_at: Option<SystemTime> = None;
+                let mut updated_at: Option<SystemTime> = None;
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::id => {
+                            if id.is_some() {
+                                return Err(serde::de::Error::duplicate_field("id"));
+                            }
+                            id = Some(map.next_value()?);
+                        }
+                        Field::label => {
+                            if label.is_some() {
+                                return Err(serde::de::Error::duplicate_field("label"));
+                            }
+                            label = Some(map.next_value()?);
+                        }
+                        Field::appearance => {
+                            if appearance.is_some() {
+                                return Err(serde::de::Error::duplicate_field("appearance"));
+                            }
+                            appearance = Some(map.next_value()?);
+                        }
+                        Field::content => {
+                            if content.is_some() {
+                                return Err(serde::de::Error::duplicate_field("content"));
+                            }
+                            content = Some(map.next_value()?);
+                        }
+                        Field::actions => {
+                            if actions.is_some() {
+                                return Err(serde::de::Error::duplicate_field("actions"));
+                            }
+                            actions = Some(map.next_value()?);
+                        }
+                        Field::state => {
+                            if state.is_some() {
+                                return Err(serde::de::Error::duplicate_field("state"));
+                            }
+                            state = Some(map.next_value()?);
+                        }
+                        Field::enabled => {
+                            if enabled.is_some() {
+                                return Err(serde::de::Error::duplicate_field("enabled"));
+                            }
+                            enabled = Some(map.next_value()?);
+                        }
+                        Field::created_at => {
+                            if created_at.is_some() {
+                                return Err(serde::de::Error::duplicate_field("created_at"));
+                            }
+                            created_at = Some(map.next_value()?);
+                        }
+                        Field::updated_at => {
+                            if updated_at.is_some() {
+                                return Err(serde::de::Error::duplicate_field("updated_at"));
+                            }
+                            updated_at = Some(map.next_value()?);
+                        }
+                    }
+                }
+                let id = id.ok_or_else(|| serde::de::Error::missing_field("id"))?;
+                let label = label.ok_or_else(|| serde::de::Error::missing_field("label"))?;
+                let appearance =
+                    appearance.ok_or_else(|| serde::de::Error::missing_field("appearance"))?;
+                let content = content.ok_or_else(|| serde::de::Error::missing_field("content"))?;
+                let actions = actions.unwrap_or(Vec::new());
+                let state = state.unwrap_or(ButtonState::Default);
+                let enabled = enabled.unwrap_or(true);
+                let created_at = created_at.unwrap_or(SystemTime::now());
+                let updated_at = updated_at.unwrap_or(SystemTime::now());
+                Ok(Button {
+                    id,
+                    label,
+                    appearance,
+                    content,
+                    actions,
+                    state,
+                    enabled,
+                    created_at,
+                    updated_at,
+                })
+            }
+        }
+        const FIELDS: &[&str] = &[
+            "id",
+            "label",
+            "appearance",
+            "content",
+            "actions",
+            "state",
+            "enabled",
+            "created_at",
+            "updated_at",
+        ];
+        deserializer.deserialize_struct("Button", FIELDS, ButtonVisitor)
     }
 }
 

@@ -9,6 +9,7 @@ use deskdeck_protocol::deck::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
+use std::time::SystemTime;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -275,5 +276,8 @@ fn button_from_protocol(button: ProtocolButton) -> Result<Button, DomainError> {
         },
         actions: button.on_press.into_iter().map(Into::into).collect(),
         state: ButtonState::Default,
+        enabled: true,
+        created_at: SystemTime::now(),
+        updated_at: SystemTime::now(),
     })
 }
