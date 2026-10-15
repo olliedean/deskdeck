@@ -100,6 +100,12 @@ pub struct Button {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActionInstanceId(pub Uuid);
 
+impl std::fmt::Display for ActionInstanceId {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.0.to_string())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActionInstance {
     pub id: ActionInstanceId,

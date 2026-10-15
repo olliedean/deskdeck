@@ -27,7 +27,6 @@ struct PageFileOutput {
     buttons: Vec<Button>,
 }
 
-
 #[derive(Deserialize)]
 struct DeckFile {
     deck: DeckMetadata,
