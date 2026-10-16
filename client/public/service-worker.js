@@ -1,4 +1,4 @@
-const CACHE_NAME = "2";
+const CACHE_NAME = "3";
 const SHELL = ["/", "/index.html", "/styles.css", "/app.js", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", event => {

@@ -33,7 +33,40 @@
     const isLocalHost = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
 
     function activeDeck() {
-        return draftDeck ?? deck;
+        return draftDeck !== null ? draftDeck : deck;
+    }
+
+    function replaceChildren(element, ...children) {
+        while (element.firstChild) element.removeChild(element.firstChild);
+        children.forEach(child => element.appendChild(child));
+    }
+
+    function cloneData(value) {
+        return JSON.parse(JSON.stringify(value));
+    }
+
+    function openDialog(element) {
+        if (typeof element.showModal === "function") {
+            element.showModal();
+            return;
+        }
+        document.documentElement.classList.add("dialog-fallback");
+        document.body.classList.add("dialog-open");
+        element.setAttribute("open", "");
+        element.setAttribute("aria-modal", "true");
+    }
+
+    function closeDialog(element) {
+        if (typeof element.close === "function") {
+            element.close();
+            return;
+        }
+        element.removeAttribute("open");
+        element.removeAttribute("aria-modal");
+        if (!document.querySelector(".edit-dialog[open]")) {
+            document.body.classList.remove("dialog-open");
+        }
+        element.dispatchEvent(new Event("close"));
     }
 
     function showToast(message, kind = "error") {
@@ -49,7 +82,7 @@
     }
 
     function setIcon(element, icon) {
-        const classes = icon?.trim().split(/\s+/) ?? [];
+        const classes = icon ? icon.trim().split(/\s+/) : [];
         if (classes.length === 0 || !classes.every(className => /^fa-[a-z0-9-]+$/.test(className))) {
             element.hidden = true;
             return;
@@ -79,11 +112,11 @@
     }
 
     function safeHttpUrl(value) {
-        if (!value?.trim()) return null;
+        if (!value || !value.trim()) return null;
         try {
             const url = new URL(value.trim(), location.href);
             return ["http:", "https:"].includes(url.protocol) ? url.href : null;
-        } catch {
+        } catch (error) {
             return null;
         }
     }
@@ -95,7 +128,7 @@
         const blockedTags = new Set(["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "SVG", "MATH", "FORM", "INPUT", "BUTTON"]);
 
         const copyNode = node => {
-            if (node.nodeType === Node.TEXT_NODE) return document.createTextNode(node.textContent ?? "");
+            if (node.nodeType === Node.TEXT_NODE) return document.createTextNode(node.textContent || "");
             if (node.nodeType !== Node.ELEMENT_NODE) return null;
             if (blockedTags.has(node.tagName)) return null;
             if (!allowedTags.has(node.tagName)) {
@@ -144,7 +177,7 @@
             element.style.backgroundPosition = "center";
             element.style.backgroundSize = "cover";
         }
-        const css = button.custom_css?.trim();
+        const css = button.custom_css ? button.custom_css.trim() : "";
         if (css && !/(?:url\s*\(|@import|expression\s*\(|javascript\s*:)/i.test(css)) {
             element.style.cssText += `;${css}`;
         }
@@ -166,8 +199,9 @@
     }
 
     function renderPages() {
-        const pages = activeDeck()?.pages ?? [];
-        pageTabs.replaceChildren();
+        const currentDeck = activeDeck();
+        const pages = currentDeck ? currentDeck.pages : [];
+        replaceChildren(pageTabs);
         pageTabs.hidden = pages.length < 2;
         pages.forEach((page, index) => {
             const tab = document.createElement("button");
@@ -186,9 +220,11 @@
     function renderDeck() {
         const shownDeck = activeDeck();
         if (!shownDeck) return;
-        const page = shownDeck.pages?.[currentPage] ?? shownDeck.pages?.[0];
-        const cols = Math.max(1, Number(shownDeck.grid?.cols) || 5);
-        const rows = Math.max(1, Number(shownDeck.grid?.rows) || 3);
+        const page = shownDeck.pages
+            ? (shownDeck.pages[currentPage] || shownDeck.pages[0])
+            : null;
+        const cols = Math.max(1, Number(shownDeck.grid && shownDeck.grid.cols) || 5);
+        const rows = Math.max(1, Number(shownDeck.grid && shownDeck.grid.rows) || 3);
         toolbar.hidden = !isDesktop.matches;
         gridSettingsButton.hidden = !isDesktop.matches || !isLocalHost;
         editorHint.textContent = isLocalHost ? "Deck setup" : "Open http://127.0.0.1:8080 on the host to edit";
@@ -200,7 +236,7 @@
         saveButton.hidden = !draftDeck;
         discardButton.hidden = !draftDeck;
         if (!page) {
-            grid.replaceChildren();
+            replaceChildren(grid);
             renderPages();
             return;
         }
@@ -213,7 +249,7 @@
         });
         grid.style.gridTemplateColumns = `repeat(${cols}, minmax(0, 1fr))`;
         grid.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
-        grid.replaceChildren();
+        replaceChildren(grid);
 
         for (let position = 0; position < capacity; position += 1) {
             const placed = positionedButtons.get(position);
@@ -240,7 +276,7 @@
             element.setAttribute("aria-label", button.label);
             setButtonAppearance(element, button);
             if (draftDeck) element.setAttribute("role", "group");
-            if (button.custom_html?.trim() && !isAppearanceJson(button.custom_html)) {
+            if (button.custom_html && button.custom_html.trim() && !isAppearanceJson(button.custom_html)) {
                 const content = document.createElement("span");
                 content.className = "button-custom-content";
                 appendSafeHtml(content, button.custom_html);
@@ -285,22 +321,41 @@
                 tools.append(edit, remove);
                 element.append(tools);
             }
-            element.addEventListener("pointerdown", event => {
-                if (draftDeck) return;
-                if (event.button !== undefined && event.button !== 0) return;
-                event.preventDefault();
-                element.setPointerCapture(event.pointerId);
-                press(button, true);
-            });
             const release = event => {
                 if (element.classList.contains("is-active")) {
                     if (event) event.preventDefault();
                     press(button, false);
                 }
             };
-            element.addEventListener("pointerup", release);
-            element.addEventListener("pointercancel", release);
-            element.addEventListener("lostpointercapture", release);
+            if (window.PointerEvent) {
+                element.addEventListener("pointerdown", event => {
+                    if (draftDeck) return;
+                    if (event.button !== undefined && event.button !== 0) return;
+                    event.preventDefault();
+                    if (typeof element.setPointerCapture === "function") {
+                        element.setPointerCapture(event.pointerId);
+                    }
+                    press(button, true);
+                });
+                element.addEventListener("pointerup", release);
+                element.addEventListener("pointercancel", release);
+                element.addEventListener("lostpointercapture", release);
+            } else {
+                element.addEventListener("touchstart", event => {
+                    if (draftDeck) return;
+                    event.preventDefault();
+                    press(button, true);
+                }, { passive: false });
+                element.addEventListener("touchend", release, { passive: false });
+                element.addEventListener("touchcancel", release, { passive: false });
+                element.addEventListener("mousedown", event => {
+                    if (draftDeck || event.button !== 0) return;
+                    event.preventDefault();
+                    press(button, true);
+                });
+                element.addEventListener("mouseup", release);
+                element.addEventListener("mouseleave", release);
+            }
             element.addEventListener("keydown", event => {
                 if (!draftDeck && (event.key === " " || event.key === "Enter") && !event.repeat) press(button, true);
             });
@@ -351,10 +406,10 @@
             renderDeck();
             return;
         }
-        if (message.StatePatch?.ButtonActive) {
+        if (message.StatePatch && message.StatePatch.ButtonActive) {
             const patch = message.StatePatch.ButtonActive;
             const button = grid.querySelector(`[data-button-id="${CSS.escape(patch.button_id)}"]`);
-            button?.classList.toggle("is-active", patch.active);
+            if (button) button.classList.toggle("is-active", patch.active);
             return;
         }
         if (message.Error) showError(`${message.Error.code}: ${message.Error.message}`);
@@ -386,8 +441,8 @@
     }
 
     function makeActionEditor(action = { action: "hotkey", config: { keys: "ctrl, d" } }) {
-        const actionKind = action.action ?? action.kind ?? "hotkey";
-        let config = structuredClone(action.config ?? {});
+        const actionKind = action.action || action.kind || "hotkey";
+        let config = cloneData(action.config || {});
         const row = document.createElement("fieldset");
         row.className = "action-row";
         const heading = document.createElement("div");
@@ -424,7 +479,7 @@
         row.append(heading, valueFields);
 
         const renderFields = () => {
-            valueFields.replaceChildren();
+            replaceChildren(valueFields);
             const definition = actionDefinitions.get(kind.value);
             if (!definition) {
                 const notice = document.createElement("small");
@@ -448,7 +503,7 @@
                     input.rows = 3;
                 } else if (field.type === "select") {
                     input = document.createElement("select");
-                    for (const optionValue of field.options ?? []) {
+                    for (const optionValue of field.options || []) {
                         const option = document.createElement("option");
                         option.value = optionValue;
                         option.textContent = optionValue;
@@ -460,13 +515,17 @@
                 }
                 input.dataset.configKey = field.key;
                 input.required = field.required;
-                input.placeholder = field.placeholder ?? "";
+                input.placeholder = field.placeholder || "";
                 if (field.min !== undefined) input.min = field.min;
                 if (field.max !== undefined) input.max = field.max;
                 if (field.step !== undefined) input.step = field.step;
-                const value = config[field.key]
-                    ?? field.default
-                    ?? (field.type === "select" ? field.options?.[0] : "");
+                let value = config[field.key];
+                if (value === undefined || value === null) value = field.default;
+                if (value === undefined || value === null) {
+                    value = field.type === "select" && field.options && field.options.length
+                        ? field.options[0]
+                        : "";
+                }
                 input.value = value;
                 wrapper.append(caption, input);
                 if (field.help) {
@@ -481,7 +540,7 @@
         kind.addEventListener("change", () => {
             const definition = actionDefinitions.get(kind.value);
             config = Object.fromEntries(
-                (definition?.fields ?? [])
+                (definition ? definition.fields : [])
                     .filter(field => field.default !== undefined)
                     .map(field => [field.key, field.default]),
             );
@@ -510,13 +569,13 @@
                 : page.buttons[index];
             buttonForm.elements.namedItem("id").value = button.id;
             buttonForm.elements.namedItem("label").value = button.label;
-            buttonForm.elements.namedItem("icon").value = button.icon ?? "";
-            buttonForm.elements.namedItem("background_image").value = button.background_image ?? "";
-            buttonForm.elements.namedItem("custom_css").value = button.custom_css ?? "";
-            buttonForm.elements.namedItem("custom_html").value = button.custom_html ?? "";
+            buttonForm.elements.namedItem("icon").value = button.icon || "";
+            buttonForm.elements.namedItem("background_image").value = button.background_image || "";
+            buttonForm.elements.namedItem("custom_css").value = button.custom_css || "";
+            buttonForm.elements.namedItem("custom_html").value = button.custom_html || "";
             document.querySelector("#dialog-title").textContent = index === null ? "Add button" : "Edit button";
-            actionList.replaceChildren(...button.on_press.map(makeActionEditor));
-            dialog.showModal();
+            replaceChildren(actionList, ...button.on_press.map(makeActionEditor));
+            openDialog(dialog);
         }
 
         function addDraftButton(position = null) {
@@ -526,7 +585,9 @@
             const occupied = new Set(page.buttons.map((button, index) =>
                 Number.isInteger(button.position) ? button.position : index,
             ));
-            const target = position ?? Array.from({ length: capacity }, (_, index) => index).find(index => !occupied.has(index));
+            const target = position !== null && position !== undefined
+                ? position
+                : Array.from({ length: capacity }, (_, index) => index).find(index => !occupied.has(index));
             if (target === undefined || target >= capacity || occupied.has(target)) return;
             newButtonPosition = target;
             openButtonDialog();
@@ -536,7 +597,10 @@
         const kind = row.querySelector(".action-kind").value;
         const definition = actionDefinitions.get(kind);
         if (!definition) {
-            return { action: kind, config: JSON.parse(row.dataset.originalConfig ?? "{}") };
+            return {
+                action: kind,
+                config: JSON.parse(row.dataset.originalConfig || "{}"),
+            };
         }
         const config = {};
         for (const field of definition.fields) {
@@ -572,19 +636,19 @@
 
     editModeButton.addEventListener("click", () => {
         if (!deck) return;
-        draftDeck = structuredClone(deck);
+        draftDeck = cloneData(deck);
         renderDeck();
     });
     gridSettingsButton.addEventListener("click", () => {
         if (!deck) return;
-        if (!draftDeck) draftDeck = structuredClone(deck);
+        if (!draftDeck) draftDeck = cloneData(deck);
         gridForm.elements.namedItem("cols").value = draftDeck.grid.cols;
         gridForm.elements.namedItem("rows").value = draftDeck.grid.rows;
         renderDeck();
-        gridDialog.showModal();
+        openDialog(gridDialog);
     });
-    document.querySelector("#close-grid-dialog").addEventListener("click", () => gridDialog.close());
-    document.querySelector("#cancel-grid-dialog").addEventListener("click", () => gridDialog.close());
+    document.querySelector("#close-grid-dialog").addEventListener("click", () => closeDialog(gridDialog));
+    document.querySelector("#cancel-grid-dialog").addEventListener("click", () => closeDialog(gridDialog));
     gridForm.addEventListener("submit", event => {
         event.preventDefault();
         if (!gridForm.reportValidity()) return;
@@ -600,7 +664,7 @@
             return;
         }
         draftDeck.grid = { cols, rows };
-        gridDialog.close();
+        closeDialog(gridDialog);
         renderDeck();
     });
     addButton.addEventListener("click", () => addDraftButton());
@@ -613,8 +677,14 @@
         if (!actionsReady) return;
         actionList.append(makeActionEditor());
     });
-    document.querySelector("#close-dialog").addEventListener("click", () => dialog.close());
-    document.querySelector("#cancel-dialog").addEventListener("click", () => dialog.close());
+    document.querySelector("#close-dialog").addEventListener("click", () => closeDialog(dialog));
+    document.querySelector("#cancel-dialog").addEventListener("click", () => closeDialog(dialog));
+    document.addEventListener("keydown", event => {
+        if (event.key === "Escape" && document.body.classList.contains("dialog-open")) {
+            const open = document.querySelector(".edit-dialog[open]");
+            if (open) closeDialog(open);
+        }
+    });
     buttonForm.addEventListener("submit", event => {
         event.preventDefault();
         if (!buttonForm.reportValidity()) return;
@@ -636,7 +706,10 @@
             icon: buttonForm.elements.namedItem("icon").value.trim() || null,
             position: editingButtonIndex === null
                 ? newButtonPosition
-                : (page.buttons[editingButtonIndex].position ?? editingButtonIndex),
+                : (page.buttons[editingButtonIndex].position !== null
+                    && page.buttons[editingButtonIndex].position !== undefined
+                    ? page.buttons[editingButtonIndex].position
+                    : editingButtonIndex),
             background_image: buttonForm.elements.namedItem("background_image").value.trim() || null,
             custom_css: buttonForm.elements.namedItem("custom_css").value.trim() || null,
             custom_html: buttonForm.elements.namedItem("custom_html").value || null,
@@ -644,7 +717,7 @@
         };
         if (editingButtonIndex === null) page.buttons.push(button);
         else page.buttons[editingButtonIndex] = button;
-        dialog.close();
+        closeDialog(dialog);
         renderDeck();
     });
     dialog.addEventListener("close", () => {
@@ -652,7 +725,11 @@
         newButtonPosition = null;
         buttonForm.reset();
     });
-    isDesktop.addEventListener("change", renderDeck);
+    if (typeof isDesktop.addEventListener === "function") {
+        isDesktop.addEventListener("change", renderDeck);
+    } else if (typeof isDesktop.addListener === "function") {
+        isDesktop.addListener(renderDeck);
+    }
     window.addEventListener("resize", () => {
         const active = activeDeck();
         if (active) fitGrid(active.grid.cols, active.grid.rows);
