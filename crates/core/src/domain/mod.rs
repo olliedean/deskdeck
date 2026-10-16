@@ -18,7 +18,9 @@ pub use profile::Profile;
 #[cfg(test)]
 mod tests {
     use super::{ButtonId, DomainError, GridPosition, GridSize, Profile, Slot};
-    use deskdeck_protocol::deck::{Button as ProtocolButton, Deck, Grid, Page};
+    use deskdeck_protocol::deck::{Button as ProtocolButton, Deck, Grid};
+    use deskdeck_protocol::deck::Page as ProtocolPage;
+    use crate::domain::Page;
 
     #[test]
     fn validates_grid_dimensions_and_positions() {
@@ -46,7 +48,7 @@ mod tests {
         let deck = Deck {
             name: "Main".to_string(),
             grid: Grid { cols: 3, rows: 2 },
-            pages: vec![Page {
+            pages: vec![ProtocolPage {
                 name: "Home".to_string(),
                 buttons: vec![ProtocolButton {
                     id: "open".to_string(),
@@ -68,6 +70,51 @@ mod tests {
     }
 
     #[test]
+    fn preserves_multiple_protocol_pages() {
+        let deck = Deck {
+            name: "Main".to_string(),
+            grid: Grid { cols: 2, rows: 1 },
+            pages: vec![
+                ProtocolPage {
+                    name: "Home".to_string(),
+                    buttons: vec![ProtocolButton {
+                        id: "home-button".to_string(),
+                        label: "Home button".to_string(),
+                        icon: None,
+                        position: None,
+                        background_image: None,
+                        custom_css: None,
+                        custom_html: None,
+                        on_press: vec![],
+                    }],
+                },
+                ProtocolPage {
+                    name: "Tools".to_string(),
+                    buttons: vec![ProtocolButton {
+                        id: "tools-button".to_string(),
+                        label: "Tools button".to_string(),
+                        icon: None,
+                        position: None,
+                        background_image: None,
+                        custom_css: None,
+                        custom_html: None,
+                        on_press: vec![],
+                    }],
+                },
+            ],
+        };
+
+        let profile = Profile::try_from(deck).unwrap();
+        let round_tripped = profile.to_deck();
+
+        assert_eq!(round_tripped.pages.len(), 2);
+        assert_eq!(round_tripped.pages[0].name, "Home");
+        assert_eq!(round_tripped.pages[0].buttons[0].id, "home-button");
+        assert_eq!(round_tripped.pages[1].name, "Tools");
+        assert_eq!(round_tripped.pages[1].buttons[0].id, "tools-button");
+    }
+
+    #[test]
     fn rejects_invalid_ids_and_page_slot_counts() {
         assert!(matches!(
             ButtonId::new(" "),
@@ -79,11 +126,12 @@ mod tests {
             super::ProfileId::new("Main").unwrap(),
             "Main",
             grid,
-            vec![super::Page {
-                id: super::PageId::new("home").unwrap(),
-                name: "Home".to_string(),
-                slots: vec![Slot::Empty; 3],
-            }],
+            vec![Page::new(
+                super::PageId::new("home").unwrap(),
+                "Home".to_string(),
+                grid,
+            )
+            .unwrap()],
         );
         assert!(matches!(profile, Err(DomainError::InvalidSlotCount { .. })));
     }

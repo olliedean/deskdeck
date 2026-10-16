@@ -603,7 +603,7 @@
         gridDialog.close();
         renderDeck();
     });
-    addButton.addEventListener("click", addDraftButton);
+    addButton.addEventListener("click", () => addDraftButton());
     discardButton.addEventListener("click", () => {
         draftDeck = null;
         renderDeck();

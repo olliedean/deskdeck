@@ -1,6 +1,7 @@
 use super::DomainError;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GridSize {
     pub columns: u8,
     pub rows: u8,
@@ -28,7 +29,7 @@ impl GridSize {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GridPosition {
     pub column: u8,
     pub row: u8,
@@ -72,7 +73,7 @@ impl GridPosition {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Slot {
     Empty,
     Button(super::Button),

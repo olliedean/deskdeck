@@ -63,8 +63,8 @@ impl Profile {
                 return Err(DomainError::DuplicatePageId);
             }
             for button in page.slots.iter().filter_map(|slot| match slot {
-                super::Slot::Empty => None,
-                super::Slot::Button(button) => Some(button),
+                Slot::Empty => None,
+                Slot::Button(button) => Some(button),
             }) {
                 if button.label.trim().is_empty() {
                     return Err(DomainError::EmptyName {
@@ -112,12 +112,13 @@ impl Profile {
                 }
                 slots[position] = Slot::Button(button_from_protocol(protocol_button)?);
             }
-            pages.push(Page::new(
+            let mut page = Page::new(
                 PageId::new(format!("page-{page_index}"))?,
                 protocol_page.name,
                 grid,
-                slots,
-            )?);
+            )?;
+            page.slots = slots;
+            pages.push(page);
         }
         Self::new(profile_id, deck.name, grid, pages)
     }
