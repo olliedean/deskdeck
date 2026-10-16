@@ -18,9 +18,8 @@ pub use profile::Profile;
 #[cfg(test)]
 mod tests {
     use super::{ButtonId, DomainError, GridPosition, GridSize, Profile, Slot};
-    use deskdeck_protocol::deck::{Button as ProtocolButton, Deck, Grid};
     use deskdeck_protocol::deck::Page as ProtocolPage;
-    use crate::domain::Page;
+    use deskdeck_protocol::deck::{Button as ProtocolButton, Deck, Grid};
 
     #[test]
     fn validates_grid_dimensions_and_positions() {
@@ -121,18 +120,11 @@ mod tests {
             Err(DomainError::InvalidId { kind: "button" })
         ));
 
-        let grid = GridSize::new(2, 2).unwrap();
-        let profile = Profile::new(
-            super::ProfileId::new("Main").unwrap(),
-            "Main",
-            grid,
-            vec![Page::new(
-                super::PageId::new("home").unwrap(),
-                "Home".to_string(),
-                grid,
-            )
-            .unwrap()],
-        );
-        assert!(matches!(profile, Err(DomainError::InvalidSlotCount { .. })));
+        let mut profile = Profile::new("Main").unwrap();
+        profile.pages[0].slots.pop();
+        assert!(matches!(
+            profile.validate(),
+            Err(DomainError::InvalidSlotCount { .. })
+        ));
     }
 }
